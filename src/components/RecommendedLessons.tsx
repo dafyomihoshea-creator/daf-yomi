@@ -27,7 +27,8 @@ export function RecommendedLessons() {
       if (topMasechtot.length === 0) return [];
       const { data, error } = await supabase.from("videos").select("*").in("masechet", topMasechtot).order("published_at", { ascending: false }).limit(20);
       if (error) throw error;
-      return (data as Video[]).filter((v) => !watchedVideoIds.has(v.id)).slice(0, 4);
+      // Each video once (a lesson over several dafim also has "<videoId>_<daf>" copies).
+      return (data as Video[]).filter((v) => !watchedVideoIds.has(v.id) && String(v.youtube_id).length <= 11).slice(0, 4);
     },
     enabled: !!user && !!history && history.length > 0,
   });

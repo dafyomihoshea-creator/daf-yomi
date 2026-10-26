@@ -42,6 +42,8 @@ async function doSync(): Promise<{ newVideos: number }> {
   await catalog.markSynced();
 
   const known = new Map((await catalog.getAll()).map(v => [v.youtube_id, v]));
+  // Videos removed on purpose (duplicate uploads, clips): never add them back.
+  const ignored = new Set<string>((await store().get("app_meta/ignored_videos").catch(() => null))?.ids || []);
   const ch: any = await (await fetch(`https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${CHANNEL_ID}&key=${key}`)).json();
   const uploads = ch.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
   if (!uploads) throw new Error("Could not find the channel's uploads playlist");
@@ -56,6 +58,7 @@ async function doSync(): Promise<{ newVideos: number }> {
     for (const item of data.items) {
       const sn = item.snippet;
       const baseId: string = sn.resourceId.videoId;
+      if (ignored.has(baseId)) continue;
       const { masechet, dafs } = parseTitleForMasechetDafs(sn.title);
       const parts = dafs.length ? dafs : [null];
       const ids = parts.map((d, i) => (i === 0 ? baseId : `${baseId}_${d}`));

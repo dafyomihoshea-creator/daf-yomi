@@ -15,6 +15,13 @@ export interface Video {
 
 const PAGE_SIZE = 24;
 
+/**
+ * A lesson that covers several dafim is stored once per daf ("<videoId>" and "<videoId>_<daf>"),
+ * so daf lookups find it. Lists show each video once: the extra per-daf copies are dropped
+ * (a daf filter still finds the video by the dafim in its title).
+ */
+const isExtraDafCopy = (v: Video) => String(v.youtube_id).length > 11;
+
 export function useVideos(masechet?: string, searchQuery?: string, daf?: number) {
   return useQuery({
     queryKey: ["videos", masechet, searchQuery, daf],
@@ -48,7 +55,7 @@ export function useVideos(masechet?: string, searchQuery?: string, daf?: number)
       const { data, error } = await query;
       if (error) throw error;
       
-      let results = data as Video[];
+      let results = (data as Video[]).filter(v => !isExtraDafCopy(v));
       
       if (daf) {
         results = results.filter(v => {
@@ -87,19 +94,12 @@ export function useInfiniteVideos(masechet?: string, searchQuery?: string, daf?:
         }
       }
 
-      // If no daf filter, we can safely paginate in DB.
-      // If there IS a daf filter, we must fetch everything (for that masechet/search)
-      // and filter locally because a video might cover multiple dafs not stored in the DB column.
-      if (!daf) {
-        query = query.range(pageParam, pageParam + PAGE_SIZE - 1);
-      } else {
-        // If daf is present, we will query without limit (it's bound by masechet usually anyway).
-      }
-
+      // Lessons come from the in-memory catalog, so filter everything here and page locally
+      // (a video can cover several dafim, and its per-daf copies are left out of lists).
       const { data, error } = await query;
       if (error) throw error;
       
-      let results = data as Video[];
+      let results = (data as Video[]).filter(v => !isExtraDafCopy(v));
       
       if (daf) {
         results = results.filter(v => {
@@ -107,11 +107,9 @@ export function useInfiniteVideos(masechet?: string, searchQuery?: string, daf?:
           const actualDafs = dafs.length > 0 ? dafs : (v.daf ? [v.daf] : []);
           return actualDafs.includes(daf);
         });
-        // Now manually paginate the filtered results
-        results = results.slice(pageParam, pageParam + PAGE_SIZE);
       }
 
-      return results;
+      return results.slice(pageParam, pageParam + PAGE_SIZE);
     },
     getNextPageParam: (lastPage, allPages) => {
       if (lastPage.length < PAGE_SIZE) return undefined;
