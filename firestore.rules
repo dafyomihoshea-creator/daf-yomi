@@ -1,0 +1,89 @@
+rules_version = '2';
+// Security rules. The site has no server: visitors' browsers read the lesson catalog,
+// transcripts, article files and site texts directly, one document at a time (no listing, so
+// nobody can burn the free daily read quota by scraping). Only the managers can change them.
+// The nightly worker uses the Admin SDK, which bypasses these rules.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Keep this list in sync with config.adminEmails in server/store.ts.
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in ["eytan@luz-law.org.il"];
+    }
+    function signedIn() { return request.auth != null; }
+    function isOwner(uid) { return request.auth != null && request.auth.uid == uid; }
+
+    // Lesson catalog (a few compressed documents) and its version stamp: public, read by id.
+    match /catalog_chunks/{id} {
+      allow get: if true;
+      allow write: if isAdmin();
+    }
+    match /app_meta/{id} {
+      allow get: if id == "catalog" || isAdmin();
+      allow write: if isAdmin();
+    }
+    match /transcripts/{id} {
+      allow get: if true;
+      allow write: if isAdmin();
+    }
+
+    // Full lesson documents: edited by the managers; the public reads the catalog instead.
+    match /videos/{id} {
+      allow read, write: if isAdmin();
+    }
+    match /video_tags/{id} {
+      allow read, write: if isAdmin();
+    }
+    // Site texts: a handful of documents, public.
+    match /site_settings/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /sync_logs/{id} {
+      allow read, create: if isAdmin();
+    }
+
+    // Articles: the list is public; files are stored in pieces, read by id.
+    match /articles/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /article_files/{id} {
+      allow get: if true;
+      allow write: if isAdmin();
+    }
+
+    // Personal data of a signed-in visitor: a single document.
+    match /users/{uid} {
+      allow read, write: if isOwner(uid);
+    }
+
+    // Questions to the Rabbi: a signed-in visitor asks; only the admin answers.
+    match /lesson_questions/{id} {
+      allow create: if signedIn() && request.resource.data.user_id == request.auth.uid
+        && request.resource.data.question is string && request.resource.data.question.size() <= 3000
+        && !('answer' in request.resource.data && request.resource.data.answer != null);
+      allow read: if isAdmin() || (signedIn() && resource.data.user_id == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+    match /article_questions/{id} {
+      allow create: if signedIn() && request.resource.data.user_id == request.auth.uid
+        && request.resource.data.question is string && request.resource.data.question.size() <= 3000
+        && !('answer' in request.resource.data && request.resource.data.answer != null);
+      allow read: if isAdmin() || (signedIn() && resource.data.user_id == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    // E-mail subscription: anyone can subscribe; only the admin can see the list.
+    match /email_subscribers/{id} {
+      allow create: if request.resource.data.email is string && request.resource.data.email.size() <= 200;
+      allow read, delete: if isAdmin();
+    }
+
+    // Everything else is closed.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

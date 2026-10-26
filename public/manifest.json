@@ -1,0 +1,25 @@
+{
+  "name": "בית המדרש הדיגיטלי – שיעורי הדף היומי של הרב הושע רבינוביץ׳",
+  "short_name": "הרב הושע",
+  "description": "שיעורי הדף היומי מפי הרב הושע רבינוביץ׳",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a2744",
+  "theme_color": "#1a2744",
+  "dir": "rtl",
+  "lang": "he",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

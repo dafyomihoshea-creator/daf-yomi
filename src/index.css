@@ -1,0 +1,116 @@
+@import url('https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@300;400;500;700;900&family=Heebo:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 40 33% 98%;
+    --foreground: 220 30% 15%;
+
+    --card: 40 30% 97%;
+    --card-foreground: 220 30% 15%;
+
+    --popover: 40 33% 98%;
+    --popover-foreground: 220 30% 15%;
+
+    --primary: 220 45% 20%;
+    --primary-foreground: 40 33% 98%;
+
+    --secondary: 40 40% 92%;
+    --secondary-foreground: 220 30% 15%;
+
+    --muted: 40 20% 94%;
+    --muted-foreground: 220 15% 45%;
+
+    --accent: 43 72% 52%;
+    --accent-foreground: 220 45% 12%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 40 20% 88%;
+    --input: 40 20% 88%;
+    --ring: 220 45% 20%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 220 45% 15%;
+    --sidebar-foreground: 40 33% 95%;
+    --sidebar-primary: 43 72% 52%;
+    --sidebar-primary-foreground: 220 45% 12%;
+    --sidebar-accent: 220 40% 22%;
+    --sidebar-accent-foreground: 40 33% 95%;
+    --sidebar-border: 220 35% 25%;
+    --sidebar-ring: 43 72% 52%;
+
+    --gold: 43 72% 52%;
+    --gold-light: 43 60% 70%;
+    --gold-dark: 43 72% 38%;
+    --navy: 220 45% 20%;
+    --navy-light: 220 35% 35%;
+    --navy-dark: 220 50% 12%;
+  }
+
+  .dark {
+    --background: 220 50% 8%;
+    --foreground: 40 33% 95%;
+    --card: 220 45% 12%;
+    --card-foreground: 40 33% 95%;
+    --popover: 220 45% 12%;
+    --popover-foreground: 40 33% 95%;
+    --primary: 43 72% 52%;
+    --primary-foreground: 220 50% 8%;
+    --secondary: 220 40% 18%;
+    --secondary-foreground: 40 33% 95%;
+    --muted: 220 35% 16%;
+    --muted-foreground: 40 15% 60%;
+    --accent: 43 72% 52%;
+    --accent-foreground: 220 50% 8%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 220 35% 20%;
+    --input: 220 35% 20%;
+    --ring: 43 72% 52%;
+    --sidebar-background: 220 50% 6%;
+    --sidebar-foreground: 40 33% 95%;
+    --sidebar-primary: 43 72% 52%;
+    --sidebar-primary-foreground: 220 50% 8%;
+    --sidebar-accent: 220 40% 14%;
+    --sidebar-accent-foreground: 40 33% 95%;
+    --sidebar-border: 220 35% 15%;
+    --sidebar-ring: 43 72% 52%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-body;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display;
+  }
+}
+
+/* Sefaria Talmud text styling */
+.sefaria-text {
+  line-height: 2;
+}
+
+.sefaria-text b,
+.sefaria-text strong {
+  color: hsl(var(--accent));
+  font-weight: 700;
+}
+
+.sefaria-text i,
+.sefaria-text em {
+  font-style: normal;
+  color: hsl(var(--muted-foreground));
+}

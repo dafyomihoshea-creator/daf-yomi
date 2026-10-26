@@ -1,0 +1,65 @@
+# The site's daily work, free on GitHub Actions (the site itself has no server):
+#  - every 3 hours: new lessons from YouTube, captions, summaries
+#  - once a day (after Gemini's free quota resets at midnight Pacific): Gemini transcripts of
+#    old lessons for up to 5 hours, then rebuild the search-engine pages and publish the site.
+# Secrets (repository settings → Secrets and variables → Actions):
+#   FIREBASE_SERVICE_ACCOUNT  the worker's key (JSON)       GEMINI_API_KEY   free Gemini key (no referrer limit)
+#   YOUTUBE_API_KEY           YouTube Data API key           VITE_GEMINI_API_KEY / VITE_YOUTUBE_API_KEY  the site's browser keys
+name: Nightly worker
+
+on:
+  schedule:
+    - cron: "30 8 * * *"        # daily run: 08:30 UTC
+    - cron: "15 */3 * * *"      # light run every 3 hours
+  workflow_dispatch:
+    inputs:
+      full:
+        description: "Run the full daily job (transcripts + publish)"
+        type: boolean
+        default: true
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  work:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    env:
+      GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/.worker-key.json
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+      WORKER: "1"
+      FULL: ${{ github.event_name == 'workflow_dispatch' && inputs.full || github.event.schedule == '30 8 * * *' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Worker key
+        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > .worker-key.json
+
+      - name: New lessons, captions, summaries
+        run: npx tsx worker/nightly.ts
+
+      - name: Gemini transcripts of old lessons (up to 5 hours)
+        if: env.FULL == 'true'
+        run: npx tsx scripts/transcribe-gemini.ts run --max-hours=5
+
+      - name: Build the site and its search-engine pages
+        if: env.FULL == 'true'
+        env:
+          VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
+          VITE_YOUTUBE_API_KEY: ${{ secrets.VITE_YOUTUBE_API_KEY }}
+        run: npm run build && npx tsx worker/build-static.ts
+
+      - name: Publish
+        if: env.FULL == 'true'
+        run: npx --yes firebase-tools@14 deploy --only hosting,firestore:rules --project dafyomi-cb680 --non-interactive
+
+      - name: Remove key
+        if: always()
+        run: rm -f .worker-key.json
