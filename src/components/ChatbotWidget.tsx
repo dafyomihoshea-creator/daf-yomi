@@ -202,24 +202,26 @@ export function ChatbotWidget() {
 
   /** A citation [[L1@12:30]] → a link that opens that lesson at that minute. */
   const renderCitations = (text: string, sources: Record<string, ChatSource> | undefined, key: string | number) =>
-    text.split(/(\[\[L\d+@[\d:]+\]\])/g).map((part, i) => {
-      const m = part.match(/^\[\[(L\d+)@([\d:]+)\]\]$/);
-      const src = m && sources?.[m[1]];
+    text.split(/(\[\[L\d+@[^\]]+\]\])/g).map((part, i) => {
+      const m = part.match(/^\[\[(L\d+)@([^\]]+)\]\]$/);
       if (!m) return part;
+      const src = sources?.[m[1]];
       if (!src) return null;
       const here = src.youtubeId === currentLesson?.youtubeId;
-      return (
+      // Usually one time; the AI sometimes writes "2:08-5:17" or "17:35, 19:32" — link each one.
+      const times = m[2].match(/\d+(?::\d{1,2}){1,2}/g) || [];
+      return times.map((t, j) => (
         <Link
-          key={`${key}-${i}`}
-          to={`/lesson/${src.youtubeId}?t=${toSeconds(m[2])}`}
+          key={`${key}-${i}-${j}`}
+          to={`/lesson/${src.youtubeId}?t=${toSeconds(t)}`}
           className="inline-flex items-center gap-0.5 mx-0.5 text-[11px] text-accent hover:underline bg-accent/10 px-1.5 rounded align-baseline"
           title={src.title}
         >
           <Clock className="h-2.5 w-2.5" />
-          <span dir="ltr">{m[2]}</span>
+          <span dir="ltr">{t}</span>
           {!here && src.masechet && <span>· {src.masechet}{src.daf ? ` ${numberToHebrewDaf(src.daf)}` : ""}</span>}
         </Link>
-      );
+      ));
     });
 
   // Simple text formatting for bolding (**text**), bullet points (- text) and lesson citations

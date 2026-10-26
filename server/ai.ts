@@ -30,6 +30,16 @@ function clip(lines: string[] | null, max: number) {
 
 const NO_ANSWER = "NO_ANSWER_IN_LESSONS";
 const PASSAGE_BUDGET = 14000;
+// A question about one lesson gets its whole transcript (an hour's lesson is ~50,000 characters),
+// so the AI can also summarize it; very long lessons are sampled evenly.
+const LESSON_BUDGET = 90000;
+
+function wholeLesson(blocks: Block[], max: number): Block[] {
+  const total = blocks.reduce((s, b) => s + b[1].length, 0);
+  if (total <= max) return blocks;
+  const every = Math.ceil(total / max);
+  return blocks.filter((_, i) => i % every === 0);
+}
 
 /**
  * Words the Rabbi would likely say when answering the question (the question's own wording
@@ -87,7 +97,7 @@ export async function answerQuestion(body: any) {
     const blocks: Block[] | null = await getTranscriptBlocks(v.youtube_id);
     if (!blocks?.length) continue;
     const share = Math.max(1500, Math.floor(PASSAGE_BUDGET / Math.max(1, lessons.length)));
-    const picked = selectRelevantBlocks(blocks, terms, Math.min(share, budget));
+    const picked = scope === "lesson" ? wholeLesson(blocks, LESSON_BUDGET) : selectRelevantBlocks(blocks, terms, Math.min(share, budget));
     if (!picked.length) continue;
     const label = `L${Object.keys(sources).length + 1}`;
     sources[label] = { youtubeId: v.youtube_id, title: v.title, masechet: v.masechet ?? null, daf: v.daf ?? null };
@@ -104,10 +114,11 @@ export async function answerQuestion(body: any) {
   if (parts.length) {
     answer = await askGemini({
       system: `אתה "חברותא AI" באתר שיעורי הדף היומי של הרב הושע רבינוביץ. ענה בעברית, בקצרה ובדיוק, אך ורק על סמך קטעי התמלול שלמטה מתוך שיעורי הרב.
-- כל טענה שמבוססת על השיעור חייבת להסתיים בהפניה בפורמט המדויק [[L1@12:30]] — מזהה השיעור והזמן מתוך הקטע (זמן שמופיע בסוגריים בתחילת הקטע). אל תמציא זמנים או ציטוטים.
+- כל טענה שמבוססת על השיעור חייבת להסתיים בהפניה בפורמט המדויק [[L1@12:30]] — מזהה השיעור וזמן אחד מתוך הקטע (הזמן שמופיע בסוגריים בתחילת הקטע). לכמה זמנים כתוב כמה הפניות נפרדות, בלי טווחים. אל תמציא זמנים או ציטוטים.
 - התמלול אוטומטי ועשוי להכיל שגיאות כתיב; הבן את הכוונה.
 - אל תוסיף ידע חיצוני ואל תסתמך על פירושים אחרים.
-- אם הקטעים לא עונים על השאלה, השב רק: ${NO_ANSWER}
+- אם מבקשים סיכום, עיקרי הדברים או "על מה מדבר השיעור" — סכם את מהלך השיעור לפי הסדר בכמה נקודות, כל אחת עם הפניה לזמן.
+- רק אם בקטעים אין שום דבר שעונה על השאלה, השב רק: ${NO_ANSWER}
 
 קטעי תמלול מהשיעורים:
 ${parts.join("\n\n")}`,
