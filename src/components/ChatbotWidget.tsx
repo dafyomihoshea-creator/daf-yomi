@@ -2,11 +2,17 @@ import { useState, useRef, useEffect } from "react";
 import { useLocation, Link } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { numberToHebrewDaf } from "@/lib/masechet-list";
-import { MessageSquare, X, Send, Sparkles, Loader2, BookOpen, Clock } from "lucide-react";
+import { MessageSquare, X, Send, Sparkles, Loader2, BookOpen, Clock, LogIn, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { parseMasechetAndDaf } from "../../server/sefaria";
+import type { ChatScope, ChatSource } from "../../server/ai";
+
+/** "12:30" or "1:02:03" → seconds. */
+const toSeconds = (t: string) => t.split(":").reduce((s, p) => s * 60 + (parseInt(p, 10) || 0), 0);
 
 interface Message {
   role: "user" | "assistant";
@@ -15,6 +21,9 @@ interface Message {
   daf?: number;
   youtubeId?: string;
   videoTitle?: string;
+  sources?: Record<string, ChatSource>;
+  /** The question waiting for the visitor to choose where to look. */
+  askScope?: { question: string; masechet: string | null };
 }
 
 export function ChatbotWidget() {
@@ -25,6 +34,8 @@ export function ChatbotWidget() {
   const { lang, dir } = useLanguage();
   const location = useLocation();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { user, signIn } = useAuth();
+  const [scope, setScope] = useState<ChatScope | null>(null);
 
   // Detect if we are on a specific lesson page
   const lessonMatch = location.pathname.match(/\/lesson\/([^/]+)/);
@@ -37,6 +48,9 @@ export function ChatbotWidget() {
     masechet?: string;
     daf?: number;
   } | null>(null);
+
+  // A new lesson page: ask again where to look.
+  useEffect(() => { setScope(null); }, [currentYoutubeId]);
 
   // Auto-scroll to bottom of messages
   useEffect(() => {
@@ -76,15 +90,30 @@ export function ChatbotWidget() {
     };
   }, [currentYoutubeId]);
 
-  const handleSendMessage = async (textToSend?: string) => {
+  const scopeLabel = (s: ChatScope, masechet?: string | null) =>
+    s === "lesson" ? "השיעור הזה" : s === "masechet" ? `כל מסכת ${masechet || currentLesson?.masechet || ""}` : "כל הש״ס";
+
+  const handleSendMessage = async (textToSend?: string, chosenScope?: ChatScope) => {
     const messageText = textToSend || input;
-    if (!messageText.trim() || isLoading) return;
+    if (!messageText.trim() || isLoading || !user) return;
 
     if (!textToSend) setInput("");
 
     const userMsg: Message = { role: "user", content: messageText };
-    const updatedMessages = [...messages, userMsg];
+    // First make sure where the question is about: this lesson, the tractate, or the whole Shas.
+    const useScope = chosenScope || scope;
+    if (!useScope) {
+      const asked = parseMasechetAndDaf(messageText).masechet;
+      setMessages(prev => [...prev, userMsg, {
+        role: "assistant",
+        content: "לפני שאחפש תשובה בשיעורי הרב — על מה השאלה?",
+        askScope: { question: messageText, masechet: asked || currentLesson?.masechet || null },
+      }]);
+      return;
+    }
+    const updatedMessages = chosenScope ? messages.filter(m => !m.askScope) : [...messages, userMsg];
     setMessages(updatedMessages);
+    setScope(useScope);
     setIsLoading(true);
 
     try {
@@ -93,7 +122,8 @@ export function ChatbotWidget() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: messageText,
-          history: updatedMessages.map((m) => ({
+          scope: useScope,
+          history: updatedMessages.slice(0, -1).filter((m) => !m.askScope).map((m) => ({
             role: m.role,
             content: m.content,
           })),
@@ -118,6 +148,7 @@ export function ChatbotWidget() {
         daf: data.daf,
         youtubeId: data.youtubeId,
         videoTitle: data.videoTitle,
+        sources: data.sources,
       };
 
       setMessages((prev) => [...prev, assistantMsg]);
@@ -169,8 +200,30 @@ export function ChatbotWidget() {
           "What does Rabbi Hoshea explain?",
         ];
 
-  // Simple text formatting for bolding (**text**) and bullet points (- text)
-  const formatMessageText = (text: string) => {
+  /** A citation [[L1@12:30]] → a link that opens that lesson at that minute. */
+  const renderCitations = (text: string, sources: Record<string, ChatSource> | undefined, key: string | number) =>
+    text.split(/(\[\[L\d+@[\d:]+\]\])/g).map((part, i) => {
+      const m = part.match(/^\[\[(L\d+)@([\d:]+)\]\]$/);
+      const src = m && sources?.[m[1]];
+      if (!m) return part;
+      if (!src) return null;
+      const here = src.youtubeId === currentLesson?.youtubeId;
+      return (
+        <Link
+          key={`${key}-${i}`}
+          to={`/lesson/${src.youtubeId}?t=${toSeconds(m[2])}`}
+          className="inline-flex items-center gap-0.5 mx-0.5 text-[11px] text-accent hover:underline bg-accent/10 px-1.5 rounded align-baseline"
+          title={src.title}
+        >
+          <Clock className="h-2.5 w-2.5" />
+          <span dir="ltr">{m[2]}</span>
+          {!here && src.masechet && <span>· {src.masechet}{src.daf ? ` ${numberToHebrewDaf(src.daf)}` : ""}</span>}
+        </Link>
+      );
+    });
+
+  // Simple text formatting for bolding (**text**), bullet points (- text) and lesson citations
+  const formatMessageText = (text: string, sources?: Record<string, ChatSource>) => {
     const lines = text.split("\n");
     return lines.map((line, index) => {
       const isListItem = line.trim().startsWith("-") || line.trim().startsWith("*");
@@ -184,11 +237,11 @@ export function ChatbotWidget() {
         if (part.startsWith("**") && part.endsWith("**")) {
           return (
             <strong key={pIdx} className="font-bold text-foreground">
-              {part.slice(2, -2)}
+              {renderCitations(part.slice(2, -2), sources, `${index}-${pIdx}`)}
             </strong>
           );
         }
-        return part;
+        return renderCitations(part, sources, `${index}-${pIdx}`);
       });
 
       if (isListItem) {
@@ -226,7 +279,7 @@ export function ChatbotWidget() {
                     {lang === "he" ? "חברותא AI • עוזר הלימוד" : "Chavruta AI • Study Assistant"}
                   </h3>
                   <p className="text-[10px] text-muted-foreground">
-                    {lang === "he" ? "מבוסס על שיעורי הרב הושע ופירוש שטיינזלץ" : "Based on Rabbi Hoshea & Steinsaltz"}
+                    {lang === "he" ? "תשובות מתוך שיעורי הרב הושע, עם הפניה לדקה בשיעור" : "Answers from Rabbi Hoshea's lessons, with the minute"}
                   </p>
                 </div>
               </div>
@@ -254,9 +307,42 @@ export function ChatbotWidget() {
               </div>
             )}
 
+            {/* Where the answers come from (chosen with the first question) */}
+            {user && scope && (
+              <div className="px-4 py-1.5 border-b border-border text-[11px] text-muted-foreground flex items-center gap-1.5">
+                <Search className="h-3 w-3 text-accent" />
+                <span>{lang === "he" ? `מחפש ב: ${scopeLabel(scope)}` : `Searching: ${scope}`}</span>
+                <button className="mr-auto text-accent hover:underline" onClick={() => setScope(null)}>
+                  {lang === "he" ? "שנה" : "Change"}
+                </button>
+              </div>
+            )}
+
             {/* Messages Area */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50 dark:bg-zinc-950/20">
-              {messages.length === 0 && (
+              {!user && (
+                <div className="text-center py-10 px-4 space-y-4">
+                  <div className="w-12 h-12 rounded-full bg-accent/10 text-accent flex items-center justify-center mx-auto">
+                    <LogIn className="h-6 w-6" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="font-bold text-sm text-foreground">
+                      {lang === "he" ? "חברותא AI זמין למשתמשים רשומים" : "Chavruta AI is for registered users"}
+                    </p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      {lang === "he"
+                        ? "התחבר עם חשבון Google (בחינם) כדי לשאול שאלות על שיעורי הרב ולקבל תשובות עם הפניה לדקה המדויקת בשיעור."
+                        : "Sign in with Google (free) to ask about the lessons and get answers with the exact minute in the lesson."}
+                    </p>
+                  </div>
+                  <Button size="sm" onClick={() => signIn().catch(() => {})} className="gap-1.5">
+                    <LogIn className="h-4 w-4" />
+                    {lang === "he" ? "התחברות / הרשמה" : "Sign in / Register"}
+                  </Button>
+                </div>
+              )}
+
+              {user && messages.length === 0 && (
                 <div className="text-center py-8 px-4 space-y-4">
                   <div className="w-12 h-12 rounded-full bg-accent/10 text-accent flex items-center justify-center mx-auto">
                     <Sparkles className="h-6 w-6" />
@@ -298,7 +384,27 @@ export function ChatbotWidget() {
                     }`}
                   >
                     <div className="space-y-2">
-                      <div className="whitespace-pre-line">{formatMessageText(msg.content)}</div>
+                      <div className="whitespace-pre-line">{formatMessageText(msg.content, msg.sources)}</div>
+
+                      {msg.askScope && (
+                        <div className="flex flex-col gap-1.5 pt-1">
+                          {([
+                            ...(currentLesson ? ["lesson"] : []),
+                            ...(msg.askScope.masechet ? ["masechet"] : []),
+                            "shas",
+                          ] as ChatScope[]).map(s => (
+                            <button
+                              key={s}
+                              onClick={() => handleSendMessage(msg.askScope!.question, s)}
+                              disabled={isLoading}
+                              className="w-full text-right px-3 py-1.5 rounded-lg border border-accent/30 bg-accent/5 hover:bg-accent/15 text-xs text-foreground flex items-center gap-1.5"
+                            >
+                              <Search className="h-3 w-3 text-accent" />
+                              {scopeLabel(s, msg.askScope!.masechet)}
+                            </button>
+                          ))}
+                        </div>
+                      )}
 
                       {/* Source attribution / helper badge */}
                       {msg.role === "assistant" && msg.masechet && msg.daf && (
@@ -346,13 +452,13 @@ export function ChatbotWidget() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                disabled={isLoading}
+                disabled={isLoading || !user}
                 className="flex-1 font-body text-sm"
               />
               <Button
                 size="icon"
                 onClick={() => handleSendMessage()}
-                disabled={!input.trim() || isLoading}
+                disabled={!input.trim() || isLoading || !user}
                 className="h-9 w-9 rounded-xl shrink-0"
               >
                 <Send className="h-4 w-4" />

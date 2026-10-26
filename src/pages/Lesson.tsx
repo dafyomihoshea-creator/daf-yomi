@@ -1,4 +1,4 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useSearchParams } from "react-router-dom";
 import { useEffect, useRef, useCallback } from "react";
 import { Header } from "@/components/Header";
 import { SEOHead } from "@/components/SEOHead";
@@ -41,6 +41,10 @@ const Lesson = () => {
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hasResumedRef = useRef(false);
   const [currentTime, setCurrentTime] = useState(0);
+  // ?t=750 (from a chatbot answer): start the lesson at that second.
+  const [searchParams] = useSearchParams();
+  const startAt = Number(searchParams.get("t")) || 0;
+  const startAtRef = useRef(startAt);
   const currentTimeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const handleSeek = useCallback((seconds: number) => {
@@ -57,6 +61,10 @@ const Lesson = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [video?.id, user?.id]);
   useEffect(() => { hasResumedRef.current = false; }, [youtubeId]);
+  // A new ?t= while the player is already open (another link in the chat): jump there.
+  useEffect(() => {
+    if (startAt > 0 && startAt !== startAtRef.current) { startAtRef.current = startAt; handleSeek(startAt); }
+  }, [startAt, handleSeek]);
   useEffect(() => { if (!(window as any).YT) { const tag = document.createElement("script"); tag.src = "https://www.youtube.com/iframe_api"; document.head.appendChild(tag); } }, []);
 
   const trackWatchRef = useRef(trackWatch.mutate);
@@ -76,6 +84,12 @@ const Lesson = () => {
         playerVars: { rel: 0, modestbranding: 1 },
         events: {
           onReady: (event: any) => {
+            if (startAtRef.current > 0) {
+              hasResumedRef.current = true;
+              event.target.seekTo(startAtRef.current, true);
+              event.target.playVideo?.();
+              return;
+            }
             const progress = savedProgressRef.current;
             if (progress && progress > 10 && !hasResumedRef.current) { 
               hasResumedRef.current = true; 

@@ -120,6 +120,7 @@ on("DELETE", /^\/api\/video-transcript\/([^/]+)$/, async (_req, m) => {
 });
 
 on("POST", /^\/api\/chatbot\/query$/, async req => {
+  if (!auth.currentUser) throw new HttpError(401, "חברותא AI זמין למשתמשים רשומים בלבד. יש להתחבר כדי להשתמש בו.");
   if (!req.body?.message) throw new HttpError(400, "Missing message");
   if (!allowAi("chat", 20)) throw new HttpError(429, "הגעת למגבלת השאלות לשעה. נסה שוב מאוחר יותר.");
   return answerQuestion(req.body);

@@ -1,10 +1,20 @@
-// Chatbot and smart search. The chatbot answers from the real transcript of the lesson
-// (only the passages relevant to the question are sent to Gemini, to stay within the free
-// tier), plus the Gemara text and Steinsaltz commentary from Sefaria.
+// "Chavruta AI": answers questions from the Rabbi's own words in the lesson transcripts, with
+// links to the exact minute in the lesson. The visitor first chooses where to look: this lesson,
+// the whole tractate, or the whole Shas (tractate/Shas questions use the keyword index of all
+// transcripts, server/search-index.ts). Only when the transcripts don't answer the question
+// does it answer from the Steinsaltz commentary — and says so. Only the passages relevant to
+// the question are sent to Gemini, to stay within the free tier.
 import { catalog, baseYoutubeId } from "./catalog";
 import { getTranscriptBlocks, selectRelevantBlocks } from "./transcripts";
 import { askGemini, geminiAvailable } from "./gemini";
 import { getDafText, getSteinsaltz, parseMasechetAndDaf } from "./sefaria";
+import { rankLessons } from "./search-index";
+import type { Block } from "./transcript-format";
+
+export type ChatScope = "lesson" | "masechet" | "shas";
+
+/** A lesson quoted in an answer: the answer cites it as [[L1@12:30]]. */
+export interface ChatSource { youtubeId: string; title: string; masechet: string | null; daf: number | null }
 
 function ts(sec: number) {
   const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = Math.floor(sec % 60);
@@ -18,70 +28,122 @@ function clip(lines: string[] | null, max: number) {
   return out;
 }
 
-// Simple per-visitor limit so one person can't use up the free daily AI quota.
-const usage = new Map<string, { count: number; reset: number }>();
-export function allowAiRequest(ip: string, perHour = 20): boolean {
-  const now = Date.now();
-  const u = usage.get(ip);
-  if (!u || now > u.reset) { usage.set(ip, { count: 1, reset: now + 3600_000 }); return true; }
-  if (u.count >= perHour) return false;
-  u.count++;
-  return true;
+const NO_ANSWER = "NO_ANSWER_IN_LESSONS";
+const PASSAGE_BUDGET = 14000;
+
+/**
+ * Words the Rabbi would likely say when answering the question (the question's own wording
+ * often differs from the lesson's), for finding the right lessons and passages.
+ */
+async function searchTerms(message: string): Promise<string> {
+  const raw = await askGemini({
+    json: true,
+    temperature: 0.1,
+    prompt: `שאלה על שיעור גמרא: "${message}"
+החזר JSON בלבד: {"terms": ["10-15 מילים או צירופים קצרים בעברית/ארמית שסביר שיופיעו בדברי מגיד שיעור שעונה על השאלה, כולל מונחי הסוגיה ושמות התנאים/אמוראים הרלוונטיים"]}`,
+  });
+  try { return [message, ...(JSON.parse(raw || "{}").terms || [])].join(" "); } catch { return message; }
+}
+
+/** The lessons to search, by scope: this lesson, or the best keyword matches in the tractate / Shas. */
+async function lessonsToSearch(scope: ChatScope, message: string, current: any, terms: string): Promise<any[]> {
+  const all = await catalog.getAll();
+  const byBase = new Map<string, any>();
+  for (const v of all) if (!byBase.has(baseYoutubeId(v.youtube_id))) byBase.set(baseYoutubeId(v.youtube_id), v);
+  const asked = parseMasechetAndDaf(message);
+
+  if (scope === "lesson") {
+    const v = current?.youtubeId ? all.find(x => x.youtube_id === current.youtubeId) : null;
+    return v ? [v] : [];
+  }
+  const masechet = scope === "masechet" ? (asked.masechet || current?.masechet || null) : null;
+  // A question that names a daf goes straight to that daf's lesson(s).
+  if (asked.masechet && asked.daf) {
+    const exact = all.filter(v => v.masechet === asked.masechet && v.daf === asked.daf && v.has_transcript);
+    if (exact.length) return exact.slice(0, 2);
+  }
+  const ranked = await rankLessons(terms, masechet, scope === "shas" ? 8 : 6, id => {
+    const v = byBase.get(id);
+    return v ? `${v.title || ""} ${v.summary || ""}` : "";
+  });
+  return ranked.map(e => byBase.get(e.id)).filter(Boolean);
 }
 
 export async function answerQuestion(body: any) {
   const message = String(body?.message || "").slice(0, 1000);
   const history: any[] = Array.isArray(body?.history) ? body.history.slice(-6) : [];
   const current = body?.currentLesson || {};
+  const scope: ChatScope = ["lesson", "masechet", "shas"].includes(body?.scope) ? body.scope : (current.youtubeId ? "lesson" : "shas");
+  const conversation = history.map(h => `${h.role === "user" ? "שואל" : "עוזר"}: ${String(h.content || "").slice(0, 800)}`).join("\n");
 
-  let masechet: string | null = current.masechet || null;
-  let daf: number | null = current.daf ? parseInt(String(current.daf), 10) || null : null;
-  let youtubeId: string | null = current.youtubeId || null;
-  const asked = parseMasechetAndDaf(message);
-  // Switch lessons only when the question names a specific other daf (not just the tractate).
-  if (asked.masechet && asked.daf && !(asked.masechet === masechet && asked.daf === daf)) {
-    masechet = asked.masechet; daf = asked.daf; youtubeId = null;
-  } else if (asked.masechet && !youtubeId && !masechet) {
-    masechet = asked.masechet;
+  // 1. Passages from the transcripts of the lessons in scope, labelled L1, L2, ...
+  const terms = scope === "lesson" ? message : await searchTerms(message);
+  const lessons = await lessonsToSearch(scope, message, current, terms);
+  const sources: Record<string, ChatSource> = {};
+  const parts: string[] = [];
+  let budget = PASSAGE_BUDGET;
+  for (const v of lessons) {
+    if (budget < 1500) break;
+    const blocks: Block[] | null = await getTranscriptBlocks(v.youtube_id);
+    if (!blocks?.length) continue;
+    const share = Math.max(1500, Math.floor(PASSAGE_BUDGET / Math.max(1, lessons.length)));
+    const picked = selectRelevantBlocks(blocks, terms, Math.min(share, budget));
+    if (!picked.length) continue;
+    const label = `L${Object.keys(sources).length + 1}`;
+    sources[label] = { youtubeId: v.youtube_id, title: v.title, masechet: v.masechet ?? null, daf: v.daf ?? null };
+    const text = picked.map(b => `[${ts(b[0])}] ${b[1]}`).join("\n");
+    budget -= text.length;
+    parts.push(`=== ${label}: ${v.title} (מסכת ${v.masechet ?? "?"} דף ${v.daf ?? "?"}) ===\n${text}`);
   }
 
-  const all = await catalog.getAll();
-  let lesson = youtubeId ? all.find(v => v.youtube_id === youtubeId) : null;
-  if (!lesson && masechet && daf) lesson = all.find(v => v.masechet === masechet && v.daf === daf) || null;
-  if (lesson) { youtubeId = lesson.youtube_id; masechet ||= lesson.masechet; daf ||= lesson.daf; }
+  const where = scope === "lesson" ? "בשיעור הזה" : scope === "masechet" ? "בשיעורי המסכת" : "בשיעורי הש\"ס";
+  let answer: string | null = null;
+  let fromSteinsaltz = false;
+  if (!geminiAvailable()) return { answer: "מערכת ה-AI אינה זמינה כרגע. אפשר לנסות שוב מאוחר יותר.", sources: {}, scope };
 
-  const blocks = youtubeId ? await getTranscriptBlocks(youtubeId) : null;
-  const relevant = blocks ? selectRelevantBlocks(blocks, message) : [];
-  const [gA, gB, sA, sB] = masechet && daf
-    ? await Promise.all([getDafText(masechet, daf, "a"), getDafText(masechet, daf, "b"), getSteinsaltz(masechet, daf, "a"), getSteinsaltz(masechet, daf, "b")])
-    : [null, null, null, null];
-
-  const context = [
-    lesson ? `שיעור: ${lesson.title}\nמסכת ${lesson.masechet ?? ""} דף ${lesson.daf ?? ""}\nתקציר: ${lesson.summary || ""}` : "",
-    relevant.length
-      ? `קטעים מתמלול השיעור (תמלול אוטומטי של יוטיוב, עשוי להכיל שגיאות; המספר בסוגריים הוא הזמן בשיעור):\n${relevant.map(b => `[${ts(b[0])}] ${b[1]}`).join("\n")}`
-      : "אין תמלול זמין לשיעור זה.",
-    gA || gB ? `הגמרא (${masechet} דף ${daf}):\nעמוד א:\n${clip(gA, 2500)}עמוד ב:\n${clip(gB, 2500)}` : "",
-    sA || sB ? `ביאור שטיינזלץ:\n${clip(sA, 2500)}${clip(sB, 2500)}` : "",
-  ].filter(Boolean).join("\n\n");
-
-  const system = `אתה עוזר לימוד באתר שיעורי הדף היומי של הרב הושע רבינוביץ. ענה בעברית, בקצרה ובדיוק.
-- כשאתה מסתמך על דברי הרב בשיעור, ציין את הזמן מתוך קטעי התמלול בלבד (למשל: "בדקה 12:30 בשיעור"). אל תמציא זמנים או ציטוטים.
+  if (parts.length) {
+    answer = await askGemini({
+      system: `אתה "חברותא AI" באתר שיעורי הדף היומי של הרב הושע רבינוביץ. ענה בעברית, בקצרה ובדיוק, אך ורק על סמך קטעי התמלול שלמטה מתוך שיעורי הרב.
+- כל טענה שמבוססת על השיעור חייבת להסתיים בהפניה בפורמט המדויק [[L1@12:30]] — מזהה השיעור והזמן מתוך הקטע (זמן שמופיע בסוגריים בתחילת הקטע). אל תמציא זמנים או ציטוטים.
 - התמלול אוטומטי ועשוי להכיל שגיאות כתיב; הבן את הכוונה.
-- אם התשובה לא נמצאת בחומר שסופק, אמור זאת, ואפשר להוסיף הסבר כללי תוך ציון שזה לא מתוך השיעור.
+- אל תוסיף ידע חיצוני ואל תסתמך על פירושים אחרים.
+- אם הקטעים לא עונים על השאלה, השב רק: ${NO_ANSWER}
 
-${context}`;
-
-  const prompt = `${history.map(h => `${h.role === "user" ? "שואל" : "עוזר"}: ${String(h.content || "").slice(0, 800)}`).join("\n")}\nשואל: ${message}`;
-  let answer = geminiAvailable() ? await askGemini({ system, prompt }) : null;
-
-  if (!answer) {
-    // AI unavailable (e.g. daily free limit reached): show the most relevant passages instead.
-    answer = relevant.length
-      ? `מערכת ה-AI אינה זמינה כרגע. אלה הקטעים מהשיעור שנראים הכי קשורים לשאלה:\n\n${relevant.slice(0, 4).map(b => `[${ts(b[0])}] ${b[1].slice(0, 300)}`).join("\n\n")}`
-      : "מערכת ה-AI אינה זמינה כרגע. אפשר לנסות שוב מאוחר יותר.";
+קטעי תמלול מהשיעורים:
+${parts.join("\n\n")}`,
+      prompt: `${conversation}\nשואל: ${message}`,
+    });
+    if (answer?.includes(NO_ANSWER)) answer = null;
   }
-  return { answer, masechet, daf, youtubeId, videoTitle: lesson?.title || "" };
+
+  // 2. Not in the lessons: the Steinsaltz commentary on the daf, clearly marked as such.
+  if (!answer) {
+    // Only for a known daf: the one the question names, or this lesson's daf.
+    const asked = parseMasechetAndDaf(message);
+    const named = !!(asked.masechet && asked.daf);
+    const masechet = named ? asked.masechet : scope === "lesson" ? current.masechet || null : null;
+    const daf = named ? asked.daf : scope === "lesson" && current.daf ? parseInt(String(current.daf), 10) : null;
+    if (masechet && daf) {
+      const [gA, gB, sA, sB] = await Promise.all([getDafText(masechet, daf, "a"), getDafText(masechet, daf, "b"), getSteinsaltz(masechet, daf, "a"), getSteinsaltz(masechet, daf, "b")]);
+      if (sA || sB) {
+        const s = await askGemini({
+          system: `ענה בעברית, בקצרה, על סמך ביאור שטיינזלץ והגמרא שלמטה בלבד (מסכת ${masechet} דף ${daf}). אם גם שם אין תשובה, השב רק: ${NO_ANSWER}
+הגמרא:\n${clip(gA, 2500)}${clip(gB, 2500)}\nביאור שטיינזלץ:\n${clip(sA, 3000)}${clip(sB, 3000)}`,
+          prompt: `${conversation}\nשואל: ${message}`,
+        });
+        if (s && !s.includes(NO_ANSWER)) { answer = `לא מצאתי תשובה לשאלה ${where}. לפי ביאור שטיינזלץ על מסכת ${masechet} דף ${daf}:\n\n${s}`; fromSteinsaltz = true; }
+      }
+    }
+  }
+  if (!answer) answer = `לא מצאתי תשובה לשאלה ${where}${parts.length ? "" : " (לא נמצאו שיעורים עם תמלול שעוסקים בזה)"}. אפשר לנסות לנסח אחרת או להרחיב את היקף החיפוש.`;
+
+  // Keep only the lessons the answer actually cites.
+  const cited = fromSteinsaltz ? {} : Object.fromEntries(Object.entries(sources).filter(([k]) => answer!.includes(`[[${k}@`)));
+  const main = Object.values(cited)[0] || (scope === "lesson" ? Object.values(sources)[0] : undefined);
+  return {
+    answer, sources: cited, scope, fromSteinsaltz,
+    masechet: main?.masechet ?? current.masechet ?? null, daf: main?.daf ?? null, youtubeId: main?.youtubeId ?? null, videoTitle: main?.title ?? "",
+  };
 }
 
 export async function smartSearch(query: string) {
