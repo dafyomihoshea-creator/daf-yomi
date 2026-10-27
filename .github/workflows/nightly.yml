@@ -5,6 +5,7 @@
 # Secrets (repository settings → Secrets and variables → Actions):
 #   FIREBASE_SERVICE_ACCOUNT  the worker's key (JSON)       GEMINI_API_KEY   free Gemini key (no referrer limit)
 #   YOUTUBE_API_KEY           YouTube Data API key           VITE_GEMINI_API_KEY / VITE_YOUTUBE_API_KEY  the site's browser keys
+#   GEMINI_API_KEY_2          a second free Gemini key from another no-billing project (more transcripts a day)
 name: Nightly worker
 
 on:
@@ -29,6 +30,7 @@ jobs:
     env:
       GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/.worker-key.json
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
       YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
       WORKER: "1"
       FULL: ${{ github.event_name == 'workflow_dispatch' && inputs.full || github.event.schedule == '30 8 * * *' }}

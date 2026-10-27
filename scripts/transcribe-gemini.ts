@@ -31,15 +31,23 @@ const MAX_UNITS = argNum("max-units", 20000);
 const LIMIT = argNum("limit", 100000);
 const SAVE_EVERY = argNum("save-every", WORKER ? 5 : 10);
 const CHUNK_SEC = 600;
-const MODELS = (argStr("models") || "gemini-3.8-flash,gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash,gemini-3-flash-preview").split(",");
-const KEY = (process.env.GEMINI_TRANSCRIBE_KEY || process.env.GEMINI_API_KEY || fs.readFileSync(path.join(ROOT, ".local-gemini-key"), "utf-8")).trim();
+// Each model has its own free daily quota (20 requests). Google now serves 3.7-flash and
+// 3.5-flash from the 3.8 and 3.6 quotas, so only these three are worth asking.
+const MODELS = (argStr("models") || "gemini-3.8-flash,gemini-3.6-flash,gemini-3-flash-preview").split(",");
+// Free quotas are per Google project: every key from another no-billing project adds a full set.
+const KEYS = [process.env.GEMINI_API_KEY, process.env.GEMINI_API_KEY_2]
+  .map(k => (k || "").trim()).filter(Boolean);
+if (!KEYS.length) KEYS.push(fs.readFileSync(path.join(ROOT, ".local-gemini-key"), "utf-8").trim());
 
 type Block = [number, string];
 interface State {
   done: Record<string, { blocks: number; model: string; at: string }>;
   failed: Record<string, { tries: number; error: string }>;
   day: { date: string; units: number };
+  /** Short report of the last runs (newest first), to see what each night did. */
+  runs?: RunReport[];
 }
+interface RunReport { started: string; ended?: string; transcribed: number; requests: Record<string, string>; notes: string[] }
 const EMPTY_STATE: State = { done: {}, failed: {}, day: { date: "", units: 0 } };
 let state: State;
 let store: (() => import("../server/store").Store) | null = null;
@@ -59,7 +67,11 @@ const saveState = () => {
   stateWrite = stateWrite.then(() => store!().set(STATE_DOC, { json, updated_at: new Date().toISOString() }))
     .catch((e: any) => console.error("State save failed:", e?.message || e));
 };
-const flushState = async () => { saveState(); await stateWrite; };
+const flushState = async () => {
+  if (store) { run.ended = new Date().toISOString(); state.runs = [run, ...(state.runs || []).filter(r => r.started !== run.started)].slice(0, 14); }
+  saveState();
+  await stateWrite;
+};
 const log = (...a: any[]) => {
   const line = [new Date().toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" }), ...a].join(" ");
   console.log(line);
@@ -89,12 +101,24 @@ const PROMPT = (from: string, to: string) => `תמלל מילה במילה, בע
 const hms = (s: number) => [Math.floor(s / 3600), Math.floor(s / 60) % 60, s % 60].map(n => String(n).padStart(2, "0")).join(":");
 
 class QuotaError extends Error {}
-const exhausted = new Map<string, string>(); // model -> Pacific date it ran out
+const exhausted = new Map<string, string>(); // "key#|model" -> Pacific date it ran out
+const SLOTS = KEYS.flatMap((key, k) => MODELS.map(model => ({ key, model, id: `key${k + 1}|${model}` })));
+
+// This run's report: per key+model, answers used / rejected / quota.
+const run: RunReport = { started: new Date().toISOString(), transcribed: 0, requests: {}, notes: [] };
+const tally = new Map<string, { ok: number; rejected: number; errors: number; quota: boolean }>();
+function count(slot: string, what: "ok" | "rejected" | "errors" | "quota") {
+  const t = tally.get(slot) || { ok: 0, rejected: 0, errors: 0, quota: false };
+  if (what === "quota") t.quota = true; else t[what]++;
+  tally.set(slot, t);
+  run.requests = Object.fromEntries(Array.from(tally, ([k, v]) => [k, `${v.ok} ok, ${v.rejected} rejected, ${v.errors} errors${v.quota ? ", daily limit reached" : ""}`]));
+}
+function note(text: string) { if (run.notes.length < 30) run.notes.push(text.slice(0, 200)); }
 
 async function geminiChunk(id: string, start: number, end: number): Promise<{ text: string; model: string }> {
   let lastErr = "";
-  for (const model of MODELS) {
-    if (exhausted.get(model) === pacificDate()) continue;
+  for (const { key: KEY, model, id: slot } of SLOTS) {
+    if (exhausted.get(slot) === pacificDate()) continue;
     for (let attempt = 1; attempt <= 2; attempt++) {
       const body = {
         contents: [{ role: "user", parts: [
@@ -109,22 +133,23 @@ async function geminiChunk(id: string, start: number, end: number): Promise<{ te
           method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(600_000),
         });
         j = await r.json();
-      } catch (e: any) { lastErr = String(e?.message || e); await sleep(30_000); continue; }
+      } catch (e: any) { lastErr = String(e?.message || e); count(slot, "errors"); await sleep(30_000); continue; }
       if (r.status === 429) {
         const msg = JSON.stringify(j?.error || {});
-        if (/PerDay|per day|daily/i.test(msg)) { log(`${model}: free daily limit reached.`); exhausted.set(model, pacificDate()); break; }
+        if (/PerDay|per day|daily/i.test(msg)) { log(`${slot}: free daily limit reached.`); count(slot, "quota"); exhausted.set(slot, pacificDate()); break; }
         lastErr = msg.slice(0, 300); await sleep(65_000); continue; // per-minute limit: wait and retry
       }
-      if (r.status === 404) { exhausted.set(model, "9999"); break; }
-      if (!r.ok) { lastErr = `${r.status} ${JSON.stringify(j?.error || j).slice(0, 300)}`; await sleep(20_000); continue; }
+      if (r.status === 404) { note(`${slot}: model not found`); exhausted.set(slot, "9999"); break; }
+      if (!r.ok) { lastErr = `${r.status} ${JSON.stringify(j?.error || j).slice(0, 300)}`; count(slot, "errors"); await sleep(20_000); continue; }
       const cand = j.candidates?.[0];
       const text = (cand?.content?.parts || []).map((p: any) => p.text || "").join("");
-      if (cand?.finishReason && !["STOP", "MAX_TOKENS"].includes(cand.finishReason)) { lastErr = `finish ${cand.finishReason}`; continue; }
-      if (looksLooped(text)) { lastErr = "repetition loop"; continue; }
+      if (cand?.finishReason && !["STOP", "MAX_TOKENS"].includes(cand.finishReason)) { lastErr = `finish ${cand.finishReason}`; count(slot, "rejected"); note(`${id} ${slot}: ${lastErr}`); continue; }
+      if (looksLooped(text)) { lastErr = "repetition loop"; count(slot, "rejected"); note(`${id} ${slot}: repetition loop`); continue; }
+      count(slot, "ok");
       return { text, model };
     }
   }
-  if (MODELS.every(m => exhausted.get(m) === pacificDate() || exhausted.get(m) === "9999")) throw new QuotaError("all models over daily limit");
+  if (SLOTS.every(s => exhausted.get(s.id) === pacificDate() || exhausted.get(s.id) === "9999")) throw new QuotaError("all models over daily limit");
   throw new Error(lastErr || "gemini failed");
 }
 
@@ -326,6 +351,7 @@ for (const [i, v] of todo.entries()) {
       const res = await transcribe(v.id);
       if (!res) { state.failed[v.id] = { tries: 3, error: "no speech or under 2 minutes" }; saveState(); log(`[${i + 1}/${todo.length}] ${v.id}: no speech or under 2 minutes`); break; }
       pending.push({ id: v.id, ...res });
+      run.transcribed++;
       delete state.failed[v.id];
       log(`[${i + 1}/${todo.length}] ${v.id}: ${res.blocks.length} blocks (${res.model}, ${Math.round((Date.now() - t0) / 1000)}s) ${v.title.slice(0, 50)}`);
       if (pending.length >= SAVE_EVERY) await savePending();
@@ -335,6 +361,7 @@ for (const [i, v] of todo.entries()) {
       const f = state.failed[v.id] = { tries: (state.failed[v.id]?.tries || 0) + 1, error: String(err?.message || err).slice(0, 300) };
       saveState();
       log(`[${i + 1}/${todo.length}] ${v.id}: error (try ${f.tries}): ${f.error}`);
+      note(`${v.id}: ${f.error}`);
       break;
     }
   }
