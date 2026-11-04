@@ -62,8 +62,8 @@ function findMasechet(title: string): { name: string; index: number; length: num
 const NUM = `(?<![א-ת\\d])(\\d+|[א-ת]{1,3}(?:["'״׳]{1,2}[א-ת])?)(?![א-ת])`;
 // "עמ א", "עמוד ב", "ע''א", "ע"ב", "עמא", or a bare "א"/"ב" right after the daf number.
 const AMUD = `(?:\\s*(?:עמ(?:וד)?\\.?\\s*|ע["'״׳]{1,2})?\\s*["'״׳]?([אב])["'״׳]?(?![א-ת]))`;
-// "מדף", "דף", or nothing; "עד", "עדף" (typo), "ועד".
-const FROM = `(?:מ?דף\\s+)?`;
+// "מדף", "בדף", "מהדף", "דף", or nothing; "עד", "עדף" (typo), "ועד".
+const FROM = `(?:(?:מ|ב|מה)?דף\\s+)?`;
 const TO = `\\s+(?:ו?עד\\s+(?:דף\\s+)?|עדף\\s+)`;
 
 const RANGE_WITH_AMUD = new RegExp(`${FROM}${NUM}${AMUD}(.*?)${TO}${NUM}${AMUD}`, "u");
@@ -72,6 +72,12 @@ const TWO_DAFIM = new RegExp(`^\\s*(?:דפים\\s+)?${NUM}\\s*(?:,|-|\\s+ו?)\\s
 const ONE_DAF = new RegExp(`^\\s*(?:מ?דף\\s+)?${NUM}(?![א-ת])`, "u");
 
 export function parseTitleForMasechetDafs(title: string): { masechet: string | null; dafs: number[] } {
+  const r = parseRaw(title);
+  // The Gemara starts at daf ב: a "daf א" is always a misread amud letter.
+  return { masechet: r.masechet, dafs: r.dafs.filter(d => d >= 2) };
+}
+
+function parseRaw(title: string): { masechet: string | null; dafs: number[] } {
   const found = findMasechet(title);
   if (!found) return { masechet: null, dafs: [] };
   const masechet = found.name;

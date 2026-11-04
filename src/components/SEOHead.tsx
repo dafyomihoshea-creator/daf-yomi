@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { SITE_ORIGIN, RABBI } from "@/lib/seo-text";
 
 interface SEOHeadProps {
   title: string;
@@ -7,11 +8,10 @@ interface SEOHeadProps {
 }
 
 export function SEOHead({ title, description, path }: SEOHeadProps) {
-  const fullTitle = title.includes("רבינוביץ") ? title : `${title} | הרב הושע רבינוביץ׳`;
+  const fullTitle = title.includes("רבינוביץ") ? title : `${title} | ${RABBI}`;
   const desc = description || "שיעורי תורה וגמרא מפי הרב הושע רבינוביץ׳ — לימוד מסודר לפי מסכת ודף";
-  // Always point search engines at the main address, whichever address the visitor used.
-  const siteOrigin = "https://daf-yomi.ai.studio";
-  const url = `${siteOrigin}${path || ""}`;
+  // Always point search engines at the site's main address (never the old domain).
+  const url = `${SITE_ORIGIN}${path || "/"}`;
 
   useEffect(() => {
     document.title = fullTitle;
@@ -30,7 +30,6 @@ export function SEOHead({ title, description, path }: SEOHeadProps) {
     setMeta("property", "og:title", fullTitle);
     setMeta("property", "og:description", desc);
     setMeta("property", "og:url", url);
-    setMeta("property", "og:type", "website");
     setMeta("name", "twitter:title", fullTitle);
     setMeta("name", "twitter:description", desc);
 

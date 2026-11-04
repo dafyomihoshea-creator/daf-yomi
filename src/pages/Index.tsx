@@ -158,7 +158,7 @@ const Index = () => {
             <motion.div
               initial="hidden"
               whileInView="visible"
-              viewport={{ once: true, margin: "-50px" }}
+              viewport={{ once: true, margin: "200px 0px" }}
               variants={staggerContainer}
               className="grid grid-cols-3 gap-4 text-center"
             >
@@ -185,7 +185,7 @@ const Index = () => {
         <motion.section
           initial="hidden"
           whileInView="visible"
-          viewport={{ once: true, margin: "-80px" }}
+          viewport={{ once: true, margin: "200px 0px" }}
           variants={fadeUp}
           custom={0}
           className="container px-4 py-10"
@@ -244,7 +244,7 @@ const Index = () => {
           <motion.div
             initial="hidden"
             whileInView="visible"
-            viewport={{ once: true, margin: "-60px" }}
+            viewport={{ once: true, margin: "200px 0px" }}
             variants={fadeUp}
             className="flex items-center justify-between mb-6"
           >
@@ -259,7 +259,7 @@ const Index = () => {
           <motion.div
             initial="hidden"
             whileInView="visible"
-            viewport={{ once: true, margin: "-60px" }}
+            viewport={{ once: true, margin: "200px 0px" }}
             variants={staggerContainer}
             className="grid grid-cols-2 sm:grid-cols-4 gap-3"
           >
@@ -315,7 +315,7 @@ const Index = () => {
           <motion.div
             initial="hidden"
             whileInView="visible"
-            viewport={{ once: true, margin: "-40px" }}
+            viewport={{ once: true, margin: "200px 0px" }}
             variants={staggerContainer}
             className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"
           >
@@ -340,7 +340,7 @@ const Index = () => {
         <motion.section
           initial="hidden"
           whileInView="visible"
-          viewport={{ once: true, margin: "-60px" }}
+          viewport={{ once: true, margin: "200px 0px" }}
           variants={fadeUp}
           className="container px-4 py-10"
         >

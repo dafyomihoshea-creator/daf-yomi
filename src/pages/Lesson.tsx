@@ -2,6 +2,7 @@ import { useParams, Link, useSearchParams } from "react-router-dom";
 import { useEffect, useRef, useCallback } from "react";
 import { Header } from "@/components/Header";
 import { SEOHead } from "@/components/SEOHead";
+import { lessonTitle, lessonDescription, lessonPath } from "@/lib/seo-text";
 import { ShareButtons } from "@/components/ShareButtons";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { AddToPlaylistButton } from "@/components/AddToPlaylistButton";
@@ -41,6 +42,8 @@ const Lesson = () => {
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hasResumedRef = useRef(false);
   const [currentTime, setCurrentTime] = useState(0);
+  // Phones: one column (video first, then the Gemara and Steinsaltz). Decided once, so the player is not rebuilt.
+  const [isPhone] = useState(() => typeof window !== "undefined" && window.innerWidth < 768);
   // ?t=750 (from a chatbot answer): start the lesson at that second.
   const [searchParams] = useSearchParams();
   const startAt = Number(searchParams.get("t")) || 0;
@@ -177,10 +180,62 @@ const Lesson = () => {
         )}
       </div>
 
-      <SEOHead title={videoTitle} description={videoSummary ? String(videoSummary).slice(0, 300) : lang === "en" ? `Lesson on ${video.masechet ? getMasechetEnglish(video.masechet) : ""} by Rabbi Hoshea Rabinowitz` : `שיעור ${video.masechet ? `במסכת ${video.masechet}` : ""} ${video.daf ? `דף ${video.daf}` : ""} מפי הרב הושע רבינוביץ׳`} path={`/lesson/${video.youtube_id}`} />
+      <SEOHead title={lang === "en" ? videoTitle : lessonTitle(video)} description={videoSummary ? String(videoSummary).slice(0, 300) : lang === "en" ? `Lesson on ${video.masechet ? getMasechetEnglish(video.masechet) : ""} by Rabbi Hoshea Rabinowitz` : lessonDescription(video)} path={lessonPath(video.youtube_id)} />
 
       <div className="container px-4 pb-8 max-w-7xl">
-        {video.masechet && video.daf ? (
+        {video.masechet && video.daf && isPhone ? (
+          <div>
+                <div className="aspect-video rounded-lg overflow-hidden bg-foreground/5 shadow-lg">
+                  <div id={`yt-player-${video.youtube_id}`} className="w-full h-full" />
+                </div>
+                {videoSummary && (
+                  <div className="mt-5 p-4 rounded-lg bg-accent/5 border border-accent/20" dir={dir}>
+                    <p className="text-sm font-body text-foreground leading-relaxed">
+                      <span className="font-display font-bold text-accent">{t("lesson.summary")}</span>{videoSummary}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground mt-2 font-body">
+                      {(video as any).summary_edited ? t("lesson.summaryEdited") : t("lesson.summaryAi")}
+                    </p>
+                  </div>
+                )}
+                <div className="mt-5" dir={dir}>
+                  <h1 className="font-display text-xl md:text-2xl font-bold text-foreground leading-relaxed">{videoTitle}</h1>
+                  <div className="flex items-center justify-between flex-wrap gap-3 mt-3">
+                    <div className="flex items-center gap-3">
+                      {video.masechet && (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-accent/15 text-accent font-body text-sm font-medium">
+                          <BookOpen className="h-3.5 w-3.5" />{getMasechetEnglish(video.masechet)}
+                        </span>
+                      )}
+                      {video.daf && displayDafLabel && <span className="text-sm text-muted-foreground font-body">{displayDafLabel}</span>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {video.masechet && <FollowMasechetButton masechet={video.masechet} />}
+                      <FavoriteButton videoId={video.id} />
+                      <AddToPlaylistButton videoId={video.id} />
+                      <ShareButtons url={`${window.location.origin}/lesson/${video.youtube_id}`} title={videoTitle} summary={videoSummary || undefined} />
+                    </div>
+                  </div>
+                </div>
+                {video.youtube_id && (
+                  <LessonTranscript
+                    youtubeId={video.youtube_id}
+                    onSeek={handleSeek}
+                    currentTime={currentTime}
+                  />
+                )}
+                {video.id && <LessonNotes videoId={video.id} />}
+                {video.id && <LessonQuestionForm videoId={video.id} />}
+                {adjacent && (adjacent.prev || adjacent.next) && (
+                  <div className="flex items-center justify-between mt-6 pt-4 border-t border-border">
+                    {adjacent.prev ? (<Link to={`/lesson/${adjacent.prev.youtube_id}`}><Button variant="outline" className="font-body"><ChevronRight className="h-4 w-4 ml-1" />{dafLabel(adjacent.prev.daf!)}</Button></Link>) : <div />}
+                    {adjacent.next ? (<Link to={`/lesson/${adjacent.next.youtube_id}`}><Button variant="outline" className="font-body">{dafLabel(adjacent.next.daf!)}<ChevronLeft className="h-4 w-4 mr-1" /></Button></Link>) : <div />}
+                  </div>
+                )}
+            <div className="mt-6 h-[70vh]"><TalmudTextPanel masechet={video.masechet} daf={video.daf} /></div>
+            <div className="mt-4 h-[70vh]"><SteinsaltzTextPanel masechet={video.masechet} daf={video.daf} /></div>
+          </div>
+        ) : video.masechet && video.daf ? (
           <ResizablePanelGroup direction="horizontal" className="min-h-[600px] rounded-lg">
             <ResizablePanel defaultSize={42} minSize={25} maxSize={60}>
               <ResizablePanelGroup direction="vertical">

@@ -27,13 +27,16 @@ const masechtot = Array.from(new Set(all.map(v => v.masechet).filter(Boolean))) 
 // Addresses without their own file (login, admin, my lessons, ...) get the plain app page.
 write("app.html", await renderPage(template, "/app"));
 write("index.html", await renderPage(template, "/"));
+// Any other address: Firebase answers "404 not found" with this page (the app then shows its not-found screen).
+write("404.html", await renderPage(template, "/404"));
 for (const p of ["/browse", "/calendar", "/articles"]) write(`${p}.html`, await renderPage(template, p));
 for (const m of masechtot) write(`masechet/${m}.html`, await renderPage(template, `/masechet/${encodeURIComponent(m)}`));
 for (const v of all) write(`lesson/${v.youtube_id}.html`, await renderPage(template, `/lesson/${encodeURIComponent(v.youtube_id)}`));
 
-const urls = ["", "/browse", "/calendar", "/articles"].map(p => `<url><loc>${SITE_URL}${p}</loc></url>`);
+const urls = ["/", "/browse", "/calendar", "/articles"].map(p => `<url><loc>${SITE_URL}${p}</loc></url>`);
 for (const m of masechtot) urls.push(`<url><loc>${SITE_URL}/masechet/${encodeURIComponent(m)}</loc></url>`);
-for (const v of all) urls.push(`<url><loc>${SITE_URL}/lesson/${encodeURIComponent(v.youtube_id)}</loc>${v.published_at ? `<lastmod>${String(v.published_at).slice(0, 10)}</lastmod>` : ""}</url>`);
+// Only the original lesson pages: a per-daf copy points Google at its original.
+for (const v of all) if (v.youtube_id === baseYoutubeId(v.youtube_id)) urls.push(`<url><loc>${SITE_URL}/lesson/${encodeURIComponent(v.youtube_id)}</loc>${v.published_at ? `<lastmod>${String(v.published_at).slice(0, 10)}</lastmod>` : ""}</url>`);
 write("sitemap.xml", `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.join("")}</urlset>`);
 write("robots.txt", `User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /login\n\nSitemap: ${SITE_URL}/sitemap.xml\n`);
 

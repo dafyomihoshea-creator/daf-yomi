@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ChevronRight, ChevronLeft, Play } from "lucide-react";
 import { Header } from "@/components/Header";
 import { SEOHead } from "@/components/SEOHead";
+import { PAGE_TEXT } from "@/lib/seo-text";
 import { formatDafLabel, numberToHebrewDaf, parseTitleForMasechetDafs } from "@/lib/masechet-list";
 import { getHebrewDay, getHebrewMonthsForGregorian } from "@/lib/hebrew-date";
 import { getTodaysDafYomi } from "@/lib/daf-yomi";
@@ -110,7 +111,7 @@ export default function CalendarPage() {
 
   return (
     <>
-      <SEOHead title="לוח שיעורים | הרב הושע רבינוביץ׳" description="לוח שיעורים חודשי עם כל השיעורים לפי תאריך" />
+      <SEOHead title={PAGE_TEXT["/calendar"][0]} description={PAGE_TEXT["/calendar"][1]} path="/calendar" />
       <Header />
       <main className="container px-4 py-8 max-w-5xl mx-auto" dir="rtl">
         <h2 className="font-display text-2xl font-bold text-foreground mb-6">לוח שיעורים</h2>

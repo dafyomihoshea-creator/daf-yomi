@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { SEOHead } from "@/components/SEOHead";
+import { PAGE_TEXT } from "@/lib/seo-text";
 import { VideoCard } from "@/components/VideoCard";
 import { SearchBar } from "@/components/SearchBar";
 import { MasechetFilter } from "@/components/MasechetFilter";
@@ -64,7 +65,7 @@ const Browse = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <SEOHead title={t("browse.title")} description={lang === "en" ? "Search and browse all Talmud classes by tractate and page" : "חיפוש ועיון בכל שיעורי הגמרא לפי מסכת ודף"} path="/browse" />
+      <SEOHead title={lang === "en" ? t("browse.title") : PAGE_TEXT["/browse"][0]} description={lang === "en" ? "Search and browse all Talmud classes by tractate and page" : PAGE_TEXT["/browse"][1]} path="/browse" />
       <Header />
 
       <div className="container px-4 py-6">

@@ -40,7 +40,7 @@ export function Header() {
             </Link>
           </div>
           <Link to="/" className="flex flex-col">
-            <h1 className="font-display text-lg font-bold leading-tight">{t("header.title")}</h1>
+            <span className="font-display text-lg font-bold leading-tight">{t("header.title")}</span>
             <p className="text-xs text-primary-foreground/70 font-body">{t("header.subtitle")}</p>
           </Link>
         </div>

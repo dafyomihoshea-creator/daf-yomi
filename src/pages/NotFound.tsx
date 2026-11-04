@@ -8,6 +8,12 @@ const NotFound = () => {
 
   useEffect(() => {
     console.error("404 Error: User attempted to access non-existent route:", location.pathname);
+    // Tell search engines not to list this page.
+    let robots = document.querySelector('meta[name="robots"]');
+    if (!robots) { robots = document.createElement("meta"); robots.setAttribute("name", "robots"); document.head.appendChild(robots); }
+    robots.setAttribute("content", "noindex");
+    document.querySelector('link[rel="canonical"]')?.remove();
+    return () => { robots?.remove(); };
   }, [location.pathname]);
 
   return (

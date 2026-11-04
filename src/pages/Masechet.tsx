@@ -1,6 +1,7 @@
 import { useParams, Link } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { SEOHead } from "@/components/SEOHead";
+import { masechetTitle, masechetDescription } from "@/lib/seo-text";
 import { VideoCard } from "@/components/VideoCard";
 import { useVideos } from "@/hooks/useVideos";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -33,8 +34,8 @@ const Masechet = () => {
   return (
     <div className="min-h-screen bg-background">
       <SEOHead
-        title={lang === "en" ? `Tractate ${getMasechetEnglish(masechet)}` : `מסכת ${masechet}`}
-        description={`${videos?.length || 0} ${lang === "en" ? "lessons in" : "שיעורי גמרא במסכת"} ${masechet}`}
+        title={lang === "en" ? `Tractate ${getMasechetEnglish(masechet)}` : masechetTitle(masechet)}
+        description={lang === "en" ? `${videos?.length || 0} lessons in ${masechet}` : masechetDescription(masechet, videos?.length || 0)}
         path={`/masechet/${encodeURIComponent(masechet)}`}
       />
       <Header />

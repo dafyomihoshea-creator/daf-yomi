@@ -263,7 +263,7 @@ export function ChatbotWidget() {
   };
 
   return (
-    <div className="fixed bottom-6 left-6 z-50 flex flex-col items-start font-body" dir={dir}>
+    <div className="fixed bottom-4 left-4 md:bottom-6 md:left-6 z-50 flex flex-col items-start font-body" dir={dir}>
       <AnimatePresence>
         {isOpen && (
           <motion.div

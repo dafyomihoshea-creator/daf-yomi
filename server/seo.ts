@@ -4,14 +4,10 @@
 import { catalog } from "./catalog";
 import { config } from "./store";
 import { numberToHebrewDaf } from "../src/lib/masechet-list";
+import { SITE_NAME, RABBI, DEFAULT_TITLE, DEFAULT_DESC, PAGE_TEXT, lessonWhere, lessonTitle, lessonDescription, lessonPath, masechetTitle, masechetDescription, baseLessonId } from "../src/lib/seo-text";
 
 /** The site's main address (the one that should appear in Google). */
 export const SITE_URL = config.siteUrl;
-
-const SITE_NAME = "בית המדרש הדיגיטלי";
-const RABBI = "הרב הושע רבינוביץ׳";
-const DEFAULT_TITLE = `דף יומי – שיעורי ${RABBI} | ${SITE_NAME}`;
-const DEFAULT_DESC = `שיעורי הדף היומי מפי ${RABBI} ב${SITE_NAME}: כל שיעורי הגמרא לפי מסכת ודף, עם תמלול השיעור, ביאור שטיינזלץ, סיכומים ועוזר חכם לשאלות על השיעור.`;
 
 const esc = (s: string) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const jsonLd = (o: any) => `<script type="application/ld+json">${JSON.stringify(o).replace(/</g, "\\u003c")}</script>`;
@@ -62,13 +58,15 @@ async function metaFor(pathname: string): Promise<PageMeta> {
   if (lesson) {
     const v = await catalog.get(decodeURIComponent(lesson[1]));
     if (!v) return base;
-    const where = v.masechet ? `מסכת ${v.masechet}${v.daf ? ` דף ${numberToHebrewDaf(v.daf)}` : ""}` : "";
-    const title = `${where ? `${where} – ` : ""}שיעור דף יומי | ${RABBI}`;
-    const description = (v.summary || `${v.title}. שיעור הדף היומי מפי ${RABBI}, עם תמלול, ביאור שטיינזלץ ועוזר חכם לשאלות.`).slice(0, 300);
+    const where = lessonWhere(v);
+    const title = lessonTitle(v);
+    const description = lessonDescription(v);
+    // A per-daf copy of a lesson points Google at the original lesson page.
+    const mainPath = lessonPath(v.youtube_id);
     const videoId = String(v.youtube_id).substring(0, 11);
     const thumb = v.thumbnail_url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
     return {
-      title, description, path: pathname, image: thumb, type: "video.other",
+      title, description, path: mainPath, image: thumb, type: "video.other",
       ld: [{
         "@type": "VideoObject",
         name: v.title,
@@ -76,7 +74,7 @@ async function metaFor(pathname: string): Promise<PageMeta> {
         thumbnailUrl: [thumb],
         uploadDate: v.published_at || v.created_at,
         embedUrl: `https://www.youtube.com/embed/${videoId}`,
-        url: `${SITE_URL}${pathname}`,
+        url: `${SITE_URL}${mainPath}`,
         inLanguage: "he",
         author: { "@id": `${SITE_URL}/#rabbi` },
         publisher: { "@id": `${SITE_URL}/#organization` },
@@ -98,8 +96,8 @@ async function metaFor(pathname: string): Promise<PageMeta> {
     const list = (await catalog.getAll()).filter(v => v.masechet === name).sort((a, b) => (a.daf ?? 0) - (b.daf ?? 0));
     if (!list.length) return base;
     return {
-      title: `מסכת ${name} – שיעורי דף יומי | ${RABBI}`,
-      description: `כל שיעורי הדף היומי במסכת ${name} מפי ${RABBI}, דף אחר דף, עם תמלול, ביאור שטיינזלץ וסיכומים. ${list.length} שיעורים.`,
+      title: masechetTitle(name),
+      description: masechetDescription(name, new Set(list.map(v => baseLessonId(v.youtube_id))).size),
       path: pathname,
       ld: [{
         "@type": "BreadcrumbList",
@@ -112,11 +110,7 @@ async function metaFor(pathname: string): Promise<PageMeta> {
     };
   }
 
-  const pages: Record<string, [string, string]> = {
-    "/browse": [`עיון בשיעורים – כל שיעורי הדף היומי | ${RABBI}`, `חיפוש ועיון בכל שיעורי הדף היומי של ${RABBI}, לפי מסכת ודף.`],
-    "/calendar": [`לוח שיעורי הדף היומי | ${RABBI}`, `לוח השיעורים של הדף היומי לפי תאריכים – ${SITE_NAME}.`],
-    "/articles": [`מאמרים | ${SITE_NAME}`, `מאמרים ומקורות מאת ${RABBI}.`],
-  };
+  const pages = PAGE_TEXT;
   if (pages[pathname]) {
     base.title = pages[pathname][0];
     base.description = pages[pathname][1];
@@ -131,18 +125,21 @@ export async function renderPage(template: string, pathname: string): Promise<st
   try { m = await metaFor(pathname); } catch { m = { title: DEFAULT_TITLE, description: DEFAULT_DESC, path: pathname, ld: [], body: "" }; }
   const url = `${SITE_URL}${m.path === "/" ? "/" : m.path}`;
   const image = m.image || `${SITE_URL}/logo.png`;
+  // app.html (the fallback for addresses without their own file) and 404.html have no address of their own.
+  const generic = pathname === "/app" || pathname === "/404";
   const tags = [
-    `<link rel="canonical" href="${esc(url)}" />`,
+    generic ? "" : `<link rel="canonical" href="${esc(url)}" />`,
+    pathname === "/404" ? `<meta name="robots" content="noindex" />` : "",
     `<meta property="og:title" content="${esc(m.title)}" />`,
     `<meta property="og:description" content="${esc(m.description)}" />`,
-    `<meta property="og:url" content="${esc(url)}" />`,
+    generic ? "" : `<meta property="og:url" content="${esc(url)}" />`,
     `<meta property="og:image" content="${esc(image)}" />`,
     `<meta property="og:type" content="${m.type || "website"}" />`,
     `<meta name="twitter:title" content="${esc(m.title)}" />`,
     `<meta name="twitter:description" content="${esc(m.description)}" />`,
     `<meta name="twitter:image" content="${esc(image)}" />`,
     m.ld.length ? jsonLd({ "@context": "https://schema.org", "@graph": m.ld }) : "",
-  ].join("\n    ");
+  ].filter(Boolean).join("\n    ");
   return template
     .replace(/<title>[^<]*<\/title>/, `<title>${esc(m.title)}</title>`)
     .replace(/<meta name="description" content="[^"]*" \/>/, `<meta name="description" content="${esc(m.description)}" />`)
