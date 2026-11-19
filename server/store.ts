@@ -36,7 +36,7 @@ export const config = {
   geminiKey: "",
   youtubeKey: "",
   siteUrl: "https://daf-yomi-hoshea.web.app",
-  adminEmails: ["eytan@luz-law.org.il"] as string[],
+  adminEmails: ["eytan@luz-law.org.il", "hoshearabin@gmail.com"] as string[],
 };
 
 // gzip with the built-in streams (browsers and Node 18+), so no zlib/Buffer is needed.
