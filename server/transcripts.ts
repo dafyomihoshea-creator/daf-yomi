@@ -78,17 +78,22 @@ export async function tryFetchTranscript(videoId: string): Promise<boolean> {
   }
 }
 
-/** Pick the transcript passages most relevant to a question (keeps AI prompts small). */
-export function selectRelevantBlocks(blocks: Block[], question: string, maxChars = 12000): Block[] {
+/**
+ * Pick the transcript passages most relevant to a question (keeps AI prompts small).
+ * `focus`: rare words the lesson was found by (a name, a place); a passage with one of them
+ * outweighs passages that only share common words with the question.
+ */
+export function selectRelevantBlocks(blocks: Block[], question: string, maxChars = 12000, focus: string[] = []): Block[] {
   const words = question
     .replace(/[^֐-׿a-zA-Z0-9\s]/g, " ")
     .split(/\s+/)
     .filter(w => w.length > 2);
-  if (!words.length) return blocks.slice(0, Math.max(1, Math.floor(maxChars / 600)));
+  if (!words.length && !focus.length) return blocks.slice(0, Math.max(1, Math.floor(maxChars / 600)));
   const scored = blocks.map((b, i) => {
     const text = b[1];
     let score = 0;
     for (const w of words) if (text.includes(w)) score += 1 + Math.min(3, text.split(w).length - 2);
+    for (const w of focus) if (text.includes(w)) score += 20;
     return { i, score };
   });
   const picked = new Set<number>();
