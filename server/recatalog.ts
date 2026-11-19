@@ -26,7 +26,9 @@ export async function recatalogAll(dryRun = false): Promise<RecatalogResult> {
     for (const [id, daf] of wanted) {
       const cur = byId.get(id);
       const date = getGregorianDateForDaf(masechet, daf);
-      const published_at = date ? date.toISOString() : cur?.published_at ?? root.published_at ?? null;
+      // A date taken from what the Rabbi says at the start of the lesson is the real one: keep it.
+      const spoken = cur?.date_source === "spoken" ? cur : root.date_source === "spoken" ? root : null;
+      const published_at = spoken ? spoken.published_at : date ? date.toISOString() : cur?.published_at ?? root.published_at ?? null;
       if (cur && cur.masechet === masechet && cur.daf === daf && cur.published_at === published_at) continue;
       upserts.push({
         id,
@@ -36,6 +38,7 @@ export async function recatalogAll(dryRun = false): Promise<RecatalogResult> {
               id, youtube_id: id, title: root.title, thumbnail_url: root.thumbnail_url ?? null,
               summary: root.summary ?? null, has_transcript: !!root.has_transcript,
               created_at: root.created_at ?? new Date().toISOString(), masechet, daf, published_at,
+              ...(spoken ? { date_source: "spoken", spoken_hebrew_date: spoken.spoken_hebrew_date ?? null } : {}),
             },
       });
     }

@@ -78,7 +78,8 @@ async function doSync(): Promise<{ newVideos: number }> {
         const date = masechet && daf != null ? getGregorianDateForDaf(masechet, daf) : null;
         const data: any = {
           id, youtube_id: id, title: sn.title, masechet, daf, thumbnail_url: thumb,
-          published_at: date ? date.toISOString() : sn.publishedAt,
+          // Keep a date taken from what the Rabbi said in the lesson (see server/recatalog.ts).
+          published_at: existing?.date_source === "spoken" ? existing.published_at : date ? date.toISOString() : sn.publishedAt,
           ...(existing ? {} : { created_at: new Date().toISOString(), has_transcript: false }),
         };
         ops.push({ type: "set", path: `videos/${id}`, data, merge: true });
