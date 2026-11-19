@@ -24,7 +24,7 @@ export const translations = {
   // Stats
   "stats.lessons": { he: "שיעורים", en: "Lessons" },
   "stats.masechtot": { he: "מסכתות", en: "Tractates" },
-  "stats.lessonsIn": { he: "שיעורים ב", en: "Lessons in " },
+  "stats.lessonsIn": { he: "הכי הרבה שיעורים: ", en: "Most lessons: " },
   
   // Index
   "index.latestLesson": { he: "השיעור האחרון", en: "Latest Lesson" },
@@ -195,6 +195,7 @@ export const translations = {
 
   // Daf Yomi
   "dafYomi.title": { he: "📖 דף היומי", en: "📖 Daf Yomi" },
+  "dafYomi.todayLearning": { he: "הדף שלומדים היום:", en: "Today's page:" },
   "dafYomi.masechet": { he: "מסכת", en: "Tractate" },
   "dafYomi.page": { he: "דף", en: "Page" },
   "dafYomi.watchLesson": { he: "▶ צפה בשיעור", en: "▶ Watch Lesson" },

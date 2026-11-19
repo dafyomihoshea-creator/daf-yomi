@@ -28,3 +28,6 @@ scripts/.gemini-out
 
 # Firebase deploy cache
 .firebase
+
+# Local bug-report recordings
+.bug-videos/

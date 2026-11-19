@@ -21,8 +21,8 @@ export function SteinsaltzTextPanel({ masechet, daf }: SteinsaltzTextPanelProps)
   const dafLabel = lang === "en" ? `Page ${currentDaf}` : hebrewDaf;
 
   return (
-    <div className="rounded-xl border border-border bg-card shadow-sm lg:flex lg:flex-col lg:h-full" dir="rtl">
-      <div className="flex items-center justify-between p-4 border-b border-border bg-accent/5 rounded-t-xl">
+    <div className="rounded-xl border border-border bg-card shadow-sm flex flex-col h-full" dir="rtl">
+      <div className="shrink-0 flex items-center justify-between p-4 border-b border-border bg-accent/5 rounded-t-xl">
         <div className="flex items-center gap-2">
           <BookOpen className="h-5 w-5 text-accent" />
           <h3 className="font-display font-bold text-foreground">{lang === "en" ? `Steinsaltz on ${masechet} ${hebrewDaf}` : `ביאור שטיינזלץ, ${masechet} ${hebrewDaf}`}</h3>
@@ -57,19 +57,19 @@ export function SteinsaltzTextPanel({ masechet, daf }: SteinsaltzTextPanelProps)
         </div>
       ) : (
         <Tabs defaultValue="amud-a" className="w-full flex-1 flex flex-col min-h-0">
-          <TabsList className="mx-4 mt-3 grid grid-cols-2 w-auto">
+          <TabsList className="shrink-0 mx-4 mt-3 grid grid-cols-2 w-auto">
             <TabsTrigger value="amud-a" className="font-body" disabled={!data?.amudA}>{t("talmud.amudA")}</TabsTrigger>
             <TabsTrigger value="amud-b" className="font-body" disabled={!data?.amudB}>{t("talmud.amudB")}</TabsTrigger>
           </TabsList>
-          <TabsContent value="amud-a" className="lg:flex-1 lg:min-h-0 mt-2">
-            <div className="p-4 space-y-3 max-h-[500px] lg:max-h-none lg:h-full overflow-y-auto overscroll-contain">
+          <TabsContent value="amud-a" className="flex-1 min-h-0 mt-2">
+            <div className="p-4 space-y-3 h-full overflow-y-auto lg:overscroll-contain">
               {data?.amudA?.he.map((segment, i) => (
                 <p key={i} className="text-foreground font-body text-sm leading-[2] sefaria-text" dangerouslySetInnerHTML={{ __html: segment }} />
               ))}
             </div>
           </TabsContent>
-          <TabsContent value="amud-b" className="lg:flex-1 lg:min-h-0 mt-2">
-            <div className="p-4 space-y-3 max-h-[500px] lg:max-h-none lg:h-full overflow-y-auto overscroll-contain">
+          <TabsContent value="amud-b" className="flex-1 min-h-0 mt-2">
+            <div className="p-4 space-y-3 h-full overflow-y-auto lg:overscroll-contain">
               {data?.amudB?.he.map((segment, i) => (
                 <p key={i} className="text-foreground font-body text-sm leading-[2] sefaria-text" dangerouslySetInnerHTML={{ __html: segment }} />
               ))}
@@ -78,7 +78,7 @@ export function SteinsaltzTextPanel({ masechet, daf }: SteinsaltzTextPanelProps)
         </Tabs>
       )}
 
-      <div className="p-3 border-t border-border text-center rounded-b-xl">
+      <div className="shrink-0 p-3 border-t border-border text-center rounded-b-xl">
         <p className="text-[10px] text-muted-foreground font-body">
           {t("talmud.source")} <a href="https://www.sefaria.org.il" target="_blank" rel="noopener noreferrer" className="underline hover:text-accent">Sefaria</a> — ביאור שטיינזלץ
         </p>

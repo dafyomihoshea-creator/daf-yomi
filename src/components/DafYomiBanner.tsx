@@ -4,7 +4,7 @@ import { getTodaysDafYomi } from "@/lib/daf-yomi";
 import { useVideos } from "@/hooks/useVideos";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getMasechetEnglish, numberToHebrewDaf } from "@/lib/masechet-list";
-import { CalendarDays, Play, BookOpen } from "lucide-react";
+import { CalendarDays, Play } from "lucide-react";
 
 export function DafYomiBanner() {
   const dafYomi = getTodaysDafYomi();
@@ -16,23 +16,21 @@ export function DafYomiBanner() {
 
   return (
     <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }} className="container px-4 py-6">
-      <div className="rounded-xl border-2 border-accent/30 bg-accent/5 p-5 md:p-6" dir={dir}>
+      <div className="rounded-xl border-2 border-accent bg-accent/10 shadow-md p-5 md:p-6" dir={dir}>
         <div className="flex items-center gap-2 mb-3">
           <CalendarDays className="h-5 w-5 text-accent" />
           <h2 className="font-display text-lg font-bold text-foreground">{t("dafYomi.title")}</h2>
           <span className="text-xs text-muted-foreground font-body">{new Date().toLocaleDateString(lang === "en" ? "en-US" : "he-IL")}</span>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2">
-            <BookOpen className="h-4 w-4 text-accent" />
-            <span className="font-display text-base font-bold text-foreground">
-              {lang === "en" ? `Tractate ${getMasechetEnglish(dafYomi.masechet)}` : `מסכת ${dafYomi.masechet}`}
-            </span>
-            {lang === "he" && <span className="text-sm text-muted-foreground font-body">({getMasechetEnglish(dafYomi.masechet)})</span>}
-          </div>
-          <span className="inline-flex items-center px-3 py-1 rounded-full bg-accent/20 text-accent-foreground font-display font-bold text-sm">
+        <p className="text-sm text-muted-foreground font-body">{t("dafYomi.todayLearning")}</p>
+        <div className="mt-1 flex items-center gap-3 flex-wrap">
+          <span className="font-display text-2xl md:text-3xl font-bold text-foreground">
+            {lang === "en" ? `${getMasechetEnglish(dafYomi.masechet)}` : `מסכת ${dafYomi.masechet}`}
+          </span>
+          <span className="inline-flex items-center px-4 py-1 rounded-full bg-accent text-accent-foreground font-display font-bold text-xl md:text-2xl shadow-sm">
             {lang === "en" ? `Page ${dafYomi.actualDaf}` : `דף ${numberToHebrewDaf(dafYomi.actualDaf)}`}
           </span>
+          {lang === "he" && <span className="text-sm text-muted-foreground font-body">({getMasechetEnglish(dafYomi.masechet)})</span>}
         </div>
         {video ? (
           <Link to={`/lesson/${video.youtube_id}`} className="group mt-4 flex items-center gap-3 p-3 rounded-lg bg-card border border-border hover:border-accent hover:shadow-md transition-all">

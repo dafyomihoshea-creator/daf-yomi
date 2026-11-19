@@ -21,6 +21,7 @@ import { SteinsaltzTextPanel } from "@/components/SteinsaltzTextPanel";
 import { LessonQuestionForm } from "@/components/LessonQuestionForm";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { LessonTranscript } from "@/components/LessonTranscript";
+import { BackToTop } from "@/components/BackToTop";
 import { useState } from "react";
 
 declare global {
@@ -232,8 +233,9 @@ const Lesson = () => {
                     {adjacent.next ? (<Link to={`/lesson/${adjacent.next.youtube_id}`}><Button variant="outline" className="font-body">{dafLabel(adjacent.next.daf!)}<ChevronLeft className="h-4 w-4 mr-1" /></Button></Link>) : <div />}
                   </div>
                 )}
-            <div className="mt-6 h-[70vh]"><TalmudTextPanel masechet={video.masechet} daf={video.daf} /></div>
-            <div className="mt-4 h-[70vh]"><SteinsaltzTextPanel masechet={video.masechet} daf={video.daf} /></div>
+            <div className="mt-6 h-[60vh]"><TalmudTextPanel masechet={video.masechet} daf={video.daf} /></div>
+            <div className="mt-4 h-[60vh]"><SteinsaltzTextPanel masechet={video.masechet} daf={video.daf} /></div>
+            <BackToTop />
           </div>
         ) : video.masechet && video.daf ? (
           <ResizablePanelGroup direction="horizontal" className="min-h-[600px] rounded-lg">
