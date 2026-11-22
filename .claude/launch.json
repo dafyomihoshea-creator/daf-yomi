@@ -2,10 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "daf-test",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["scripts/start-test.cjs"],
-      "port": 3030
+      "name": "dev",
+      "runtimeExecutable": "npm.cmd",
+      "runtimeArgs": ["run", "dev"],
+      "port": 8080
     }
   ]
 }

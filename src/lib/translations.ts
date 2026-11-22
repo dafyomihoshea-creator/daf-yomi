@@ -177,6 +177,10 @@ export const translations = {
   "articles.noArticles": { he: "אין מאמרים עדיין", en: "No articles yet" },
   "articles.read": { he: "קריאה", en: "Read" },
   "articles.download": { he: "הורדה", en: "Download" },
+  "articles.search": { he: "חיפוש מאמר לפי שם או נושא…", en: "Search articles by title or topic…" },
+  "articles.noMatch": { he: "לא נמצאו מאמרים מתאימים", en: "No matching articles" },
+  "articles.loadError": { he: "לא הצלחנו לפתוח את המאמר. נסו שוב.", en: "Could not open the article. Please try again." },
+  "articles.count": { he: "מאמרים", en: "articles" },
   "articles.askQuestion": { he: "שאל שאלה על המאמר", en: "Ask a Question About This Article" },
   "articles.yourQuestions": { he: "השאלות שלך על מאמר זה:", en: "Your questions on this article:" },
 

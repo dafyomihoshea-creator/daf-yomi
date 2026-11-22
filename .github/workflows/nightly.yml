@@ -47,6 +47,25 @@ jobs:
       - name: New lessons, captions, summaries
         run: npx tsx worker/nightly.ts
 
+      # Word articles uploaded on the site become PDFs. LibreOffice and Hebrew fonts are
+      # installed only when an article is waiting (one database read otherwise).
+      - name: Word articles waiting for PDF?
+        id: articles
+        continue-on-error: true
+        run: npx tsx worker/convert-articles.ts --check
+
+      - name: Install LibreOffice and Hebrew fonts
+        if: steps.articles.outputs.pending != '' && steps.articles.outputs.pending != '0'
+        continue-on-error: true
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends libreoffice-writer fonts-culmus fonts-liberation2 fonts-dejavu-core
+
+      - name: Word articles to PDF
+        if: steps.articles.outputs.pending != '' && steps.articles.outputs.pending != '0'
+        continue-on-error: true
+        run: npx tsx worker/convert-articles.ts
+
       - name: Gemini transcripts of old lessons (up to 5 hours)
         if: env.FULL == 'true'
         run: npx tsx scripts/transcribe-gemini.ts run --max-hours=5

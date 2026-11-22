@@ -67,9 +67,11 @@ function ArticleUploadForm() {
     e.preventDefault();
     if (!file) return;
     try {
-      await uploadMutation.mutateAsync({ title, description, file });
+      const out = await uploadMutation.mutateAsync({ title, description, file });
       setTitle(""); setDescription(""); setFile(null);
-      toast({ title: "המאמר הועלה בהצלחה" });
+      toast(out?.converting
+        ? { title: "המאמר הועלה", description: "קובץ Word יומר ל-PDF אוטומטית תוך עד 3 שעות, ואז יופיע באתר." }
+        : { title: "המאמר הועלה בהצלחה" });
     } catch (err: any) {
       toast({ title: "שגיאה", description: err.message, variant: "destructive" });
     }
@@ -91,7 +93,7 @@ function ArticleUploadForm() {
             <Textarea value={description} onChange={(e) => setDescription(e.target.value)} className="text-foreground" dir="rtl" />
           </div>
           <div>
-            <Label className="font-body" dir="rtl">קובץ (PDF)</Label>
+            <Label className="font-body" dir="rtl">קובץ (PDF או Word)</Label>
             <Input type="file" accept=".pdf,.doc,.docx" onChange={(e) => setFile(e.target.files?.[0] || null)} className="text-foreground" />
           </div>
           <Button type="submit" disabled={uploadMutation.isPending || !file} className="font-body">
@@ -105,7 +107,7 @@ function ArticleUploadForm() {
 }
 
 function ArticlesList() {
-  const { data: articles, isLoading } = useArticles();
+  const { data: articles, isLoading } = useArticles({ includeHidden: true });
   const deleteMutation = useDeleteArticle();
   const queryClient = useQueryClient();
   const [editSummaryId, setEditSummaryId] = useState<string | null>(null);
@@ -184,8 +186,19 @@ function ArticlesList() {
                     <div>
                       <p className="font-body font-medium text-foreground text-sm">{article.title}</p>
                       <p className="text-xs text-muted-foreground font-body">
-                        {new Date(article.created_at).toLocaleDateString("he-IL")}
+                        {article.series ? `${article.series} ${article.number ?? ""} · ` : ""}
+                        {article.hebrew_date || new Date(article.created_at).toLocaleDateString("he-IL")}
                       </p>
+                      {article.status === "converting" && (
+                        <p className="text-xs font-body text-amber-600 dark:text-amber-400">
+                          קובץ Word — יומר ל-PDF אוטומטית תוך עד 3 שעות, ואז יופיע באתר
+                        </p>
+                      )}
+                      {article.status === "convert_failed" && (
+                        <p className="text-xs font-body text-destructive">
+                          ההמרה ל-PDF נכשלה. אפשר למחוק ולהעלות שוב, או לשמור את הקובץ כ-PDF ולהעלות אותו.
+                        </p>
+                      )}
                     </div>
                   </div>
                   <Button variant="ghost" size="icon" onClick={() => handleDelete(article)} disabled={deleteMutation.isPending}>

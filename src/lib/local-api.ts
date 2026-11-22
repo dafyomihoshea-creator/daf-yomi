@@ -12,7 +12,7 @@ import { runYouTubeSync, fillMissingSummaries } from "../../server/youtube";
 import { recatalogAll } from "../../server/recatalog";
 import { answerQuestion, smartSearch } from "../../server/ai";
 import { askGemini } from "../../server/gemini";
-import { saveArticleFile, deleteArticleFile } from "../../server/articles";
+import { saveArticleFile, deleteArticleFile, isWordFile, markPending, fileKey } from "../../server/articles";
 
 // Keep the catalog between visits; a visit then costs one read (the version check).
 const CATALOG_KEY = "dafyomi_catalog_v3";
@@ -139,19 +139,22 @@ on("POST", /^\/api\/admin\/articles$/, async req => {
   const data = req.raw instanceof Blob ? new Uint8Array(await req.raw.arrayBuffer()) : null;
   if (!title || !data?.length) throw new HttpError(400, "Missing title or file");
   const id = store().newId("articles");
+  const word = isWordFile(fileName);
   const chunks = await saveArticleFile(id, data);
   await store().set(`articles/${id}`, {
     id, title, description: String(req.query.get("description") || "") || null, summary: null,
     file_chunks: chunks, file_mime: req.contentType || "application/pdf", file_name: fileName,
-    file_type: fileName.split(".").pop() || "pdf", created_at: new Date().toISOString(),
+    file_type: (fileName.split(".").pop() || "pdf").toLowerCase(), created_at: new Date().toISOString(),
+    status: word ? "converting" : null,
   });
-  return { success: true, id };
+  if (word) await markPending([id]);
+  return { success: true, id, converting: word };
 });
 on("DELETE", /^\/api\/admin\/articles\/([^/]+)$/, async (_req, m) => {
   requireAdmin();
   const id = decodeURIComponent(m[1]);
   const a = await store().get(`articles/${id}`);
-  if (a?.file_chunks) await deleteArticleFile(id, a.file_chunks);
+  if (a?.file_chunks) await deleteArticleFile(fileKey({ id, file_key: a.file_key }), a.file_chunks);
   await store().delete(`articles/${id}`);
   return { success: true };
 });
