@@ -34,7 +34,7 @@ export function ArticleQuestionForm({ articleId }: ArticleQuestionFormProps) {
     return (
       <Card>
         <CardContent className="p-4 text-center" dir={dir}>
-          <p className="text-sm text-muted-foreground font-body mb-2">{t("questions.loginPrompt")}</p>
+          <p className="text-sm text-muted-foreground font-body mb-2">{t("articles.loginPrompt")}</p>
           <Link to="/login"><Button variant="outline" size="sm" className="font-body gap-1.5"><LogIn className="h-4 w-4" />{t("questions.loginButton")}</Button></Link>
         </CardContent>
       </Card>

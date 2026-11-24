@@ -93,6 +93,13 @@
     @apply bg-background text-foreground font-body;
   }
 
+  /* Phones: room at the bottom so the floating chat button never hides the last lines. */
+  @media (max-width: 767px) {
+    body {
+      padding-bottom: 4.5rem;
+    }
+  }
+
   h1, h2, h3, h4, h5, h6 {
     @apply font-display;
   }

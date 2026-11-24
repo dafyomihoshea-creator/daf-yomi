@@ -15,7 +15,7 @@ export function DafYomiBanner() {
   const videoTitle = video ? (lang === "en" && (video as any).title_en ? (video as any).title_en : video.title) : "";
 
   return (
-    <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }} className="container px-4 py-6">
+    <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.05 }} className="container px-4 py-6">
       <div className="rounded-xl border-2 border-accent bg-accent/10 shadow-md p-5 md:p-6" dir={dir}>
         <div className="flex items-center gap-2 mb-3">
           <CalendarDays className="h-5 w-5 text-accent" />

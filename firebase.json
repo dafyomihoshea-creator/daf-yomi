@@ -61,15 +61,6 @@
         ]
       },
       {
-        "source": "/search-index.json",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "public, max-age=43200"
-          }
-        ]
-      },
-      {
         "source": "**/*.html",
         "headers": [
           {

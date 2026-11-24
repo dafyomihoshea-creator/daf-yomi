@@ -18,15 +18,35 @@ async function writeSyncLog(entry: Record<string, any>) {
   await store().add("sync_logs", { ...entry, ran_at: new Date().toISOString() }).catch(() => {});
 }
 
-/** Short summary from the transcript (free Gemini key). */
+/**
+ * True when a summary has stray letters from another script inside it (the AI sometimes writes
+ * "אחד-אواحد" or "הפصוק"): Arabic, Cyrillic, Greek, Thai, Indic or Chinese letters, cantillation
+ * marks, or a Latin letter glued to a Hebrew one.
+ */
+export function hasGarbledText(s: string): boolean {
+  return /[Ͱ-ϿЀ-ӿ֑-֯؀-ۿݐ-ݿऀ-෿฀-๿぀-ヿ一-鿿가-힯ﭐ-﷿ﹰ-﻿�]|[א-ת][a-zA-Z]|[a-zA-Z][א-ת]/.test(s);
+}
+
+/** Short summary from the transcript (free Gemini key). Tries again once if the text came out garbled. */
 export async function summarizeLesson(videoId: string, title: string): Promise<string | null> {
   const blocks = await getTranscriptBlocks(videoId);
   if (!blocks?.length) return null;
   const text = blocks.map(b => b[1]).join(" ").slice(0, 6000);
-  return askGemini({
-    system: "אתה כותב סיכומים קצרים לשיעורי גמרא בעברית: 2-3 משפטים, עד 200 תווים, רק תוכן הלימוד, בלי שם הרב ובלי מספר הדף.",
-    prompt: `כותרת: ${title}\n\nתמלול (התחלה):\n${text}\n\nכתוב סיכום קצר:`,
-  });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const summary = await askGemini({
+      system: "אתה כותב סיכומים קצרים לשיעורי גמרא בעברית: 2-3 משפטים, עד 200 תווים, רק תוכן הלימוד, בלי שם הרב ובלי מספר הדף. כתוב באותיות עבריות בלבד.",
+      prompt: `כותרת: ${title}\n\nתמלול (התחלה):\n${text}\n\nכתוב סיכום קצר:`,
+      temperature: attempt ? 0.5 : undefined,
+    });
+    if (!summary) return null;
+    if (!hasGarbledText(summary) || attempt === 1) return attempt === 1 ? removeForeignLetters(summary) : summary;
+  }
+  return null;
+}
+
+/** Last resort: drop the stray foreign letters. */
+function removeForeignLetters(s: string): string {
+  return s.replace(/[Ͱ-ϿЀ-ӿ֑-֯؀-ۿݐ-ݿऀ-෿฀-๿぀-ヿ一-鿿가-힯ﭐ-﷿ﹰ-﻿�]/g, "");
 }
 
 let running: Promise<{ newVideos: number }> | null = null;

@@ -32,7 +32,9 @@ export function VideoCard({ video }: VideoCardProps) {
         />
         {video.masechet && displayDafs.length > 0 && (
           <span className="absolute top-2 right-2 bg-primary/90 text-primary-foreground text-xs font-body font-semibold px-2 py-1 rounded">
-            {lang === "en" ? `Page ${displayDafs.join(", ")}` : `דפים ${displayDafs.map(numberToHebrewDaf).join(", ")}`}
+            {lang === "en"
+              ? `${displayDafs.length > 1 ? "Pages" : "Page"} ${displayDafs.join(", ")}`
+              : `${displayDafs.length > 1 ? "דפים" : "דף"} ${displayDafs.map(numberToHebrewDaf).join(", ")}`}
           </span>
         )}
       </div>

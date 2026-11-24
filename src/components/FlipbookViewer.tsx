@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+﻿import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -99,6 +99,9 @@ export function FlipbookViewer({ pdfUrl, title }: FlipbookViewerProps) {
     setNumPages(numPages);
     setLoading(false);
     setErrorStatus(null);
+    // On a phone the page is wider than the screen: start at the screen's width.
+    const w = containerRef.current?.clientWidth || window.innerWidth;
+    if (w < 680) setScale(parseFloat(Math.max(0.3, (w - 24) / 600).toFixed(2)));
   };
 
   const onDocumentLoadError = (err: Error) => {
@@ -169,16 +172,16 @@ export function FlipbookViewer({ pdfUrl, title }: FlipbookViewerProps) {
   };
 
   const handleZoomOut = () => {
-    setScale(prev => Math.max(prev - 0.15, 0.6));
+    setScale(prev => Math.max(prev - 0.15, 0.3));
   };
 
   const handleFitWidth = () => {
     if (containerRef.current) {
-      const containerWidth = containerRef.current.clientWidth - 48; // padding factor
+      const containerWidth = containerRef.current.clientWidth - (window.innerWidth < 680 ? 24 : 48); // padding factor
       // Standard target size of A4 page rendered is ~600px width at scale 1
       const idealScale = isDoublePage 
-        ? Math.max(0.6, (containerWidth / 2) / 600)
-        : Math.max(0.6, containerWidth / 600);
+        ? Math.max(0.3, (containerWidth / 2) / 600)
+        : Math.max(0.3, containerWidth / 600);
       setScale(parseFloat(idealScale.toFixed(2)));
     }
   };
@@ -257,7 +260,7 @@ export function FlipbookViewer({ pdfUrl, title }: FlipbookViewerProps) {
             variant="ghost" 
             size="icon" 
             onClick={handleZoomOut}
-            disabled={loading || scale <= 0.6}
+            disabled={loading || scale <= 0.3}
             title={translations.zoomOut}
             className="h-9 w-9"
           >

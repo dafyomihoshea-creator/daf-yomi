@@ -1,7 +1,7 @@
 // A keyword index of all lesson transcripts, so the chatbot can find which lessons talk
 // about a question (in a whole tractate or the whole Shas) without reading every transcript.
-// The nightly worker builds it (worker/build-static.ts → dist/search-index.json); the browser
-// downloads it only when a signed-in visitor asks a tractate-wide or Shas-wide question.
+// The nightly worker builds it (worker/build-static.ts → the database, see saveIndex); the
+// browser reads it only when a signed-in visitor asks a tractate-wide or Shas-wide question.
 //
 // Two parts:
 //  - lessons[].w: each lesson's most distinctive words (the topics of the lesson);
@@ -12,6 +12,7 @@
 //    is looked up with the usual prefixes added (בבארות, ובארות, ...). Words said in a
 //    single lesson are kept too.
 import type { Block } from "./transcript-format";
+import { store, gzip, gunzip, type Op } from "./store";
 
 export interface IndexEntry { id: string; m: string | null; d: number | null; w: string }
 export interface SearchIndex { lessons: IndexEntry[]; rare: Record<string, string>; common: string }
@@ -114,8 +115,76 @@ function prepare(raw: any): Loaded {
   return { lessons: idx.lessons, words: idx.lessons.map(e => new Set(e.w.split(" "))), rare: idx.rare, common: new Set(idx.common.split(" ")) };
 }
 
+// The index is kept in the database, gzip-compressed and split into pieces
+// (search_index/{version}_{n}), readable by signed-in visitors only (the chatbot is for them),
+// so web robots cannot download it. app_meta/search_index names the current version.
+// The browser keeps a copy (IndexedDB) and reads the pieces again only when the version changes.
+export const INDEX_META = "app_meta/search_index";
+const INDEX_PIECE = 900_000;
+
+/** Save a new index (nightly worker). Writes nothing when it did not change. */
+export async function saveIndex(index: SearchIndex): Promise<{ changed: boolean; bytes: number; pieces: number }> {
+  const json = JSON.stringify(index);
+  const hash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(json)))).slice(0, 12).map(b => b.toString(16).padStart(2, "0")).join("");
+  const prev = await store().get(INDEX_META);
+  if (prev?.hash === hash) return { changed: false, bytes: prev.bytes || 0, pieces: prev.pieces || 0 };
+  const data = await gzip(json);
+  const version = String(Date.now());
+  const ops: Op[] = [];
+  for (let i = 0, n = 0; i < data.length; i += INDEX_PIECE, n++) {
+    ops.push({ type: "set", path: `search_index/${version}_${n}`, data: { data: data.slice(i, i + INDEX_PIECE) } });
+  }
+  // New pieces first, then point to them, then remove the old ones.
+  for (const op of ops) await store().commit([op]);
+  await store().set(INDEX_META, { version, pieces: ops.length, hash, bytes: data.length, updated_at: new Date().toISOString() });
+  if (prev?.version) await store().commit(Array.from({ length: prev.pieces || 0 }, (_, n) => ({ type: "delete" as const, path: `search_index/${prev.version}_${n}` })));
+  return { changed: true, bytes: data.length, pieces: ops.length };
+}
+
+const CACHE_DB = "daf-search-index";
+function cacheGet(): Promise<{ version: string; json: string } | null> {
+  return new Promise(resolve => {
+    try {
+      if (typeof indexedDB === "undefined") return resolve(null);
+      const req = indexedDB.open(CACHE_DB, 1);
+      req.onupgradeneeded = () => req.result.createObjectStore("index");
+      req.onerror = () => resolve(null);
+      req.onsuccess = () => {
+        try {
+          const get = req.result.transaction("index").objectStore("index").get("current");
+          get.onsuccess = () => resolve(get.result || null);
+          get.onerror = () => resolve(null);
+        } catch { resolve(null); }
+      };
+    } catch { resolve(null); }
+  });
+}
+function cachePut(value: { version: string; json: string }) {
+  try {
+    if (typeof indexedDB === "undefined") return;
+    const req = indexedDB.open(CACHE_DB, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore("index");
+    req.onsuccess = () => { try { req.result.transaction("index", "readwrite").objectStore("index").put(value, "current"); } catch { /* no cache */ } };
+  } catch { /* no cache */ }
+}
+
+async function fetchIndex(): Promise<any> {
+  const meta = await store().get(INDEX_META);
+  if (!meta?.version) return [];
+  const cached = await cacheGet();
+  if (cached?.version === meta.version) return JSON.parse(cached.json);
+  const docs = await store().getMany(Array.from({ length: meta.pieces }, (_, n) => `search_index/${meta.version}_${n}`));
+  const parts = docs.map(d => (d?.data as Uint8Array) || new Uint8Array());
+  const all = new Uint8Array(parts.reduce((s, p) => s + p.length, 0));
+  let at = 0;
+  for (const p of parts) { all.set(p, at); at += p.length; }
+  const json = await gunzip(all);
+  cachePut({ version: String(meta.version), json });
+  return JSON.parse(json);
+}
+
 export function loadIndex(): Promise<Loaded> {
-  loaded ??= fetch("/search-index.json").then(r => (r.ok ? r.json() : [])).then(prepare).catch(() => { loaded = null; return prepare([]); });
+  loaded ??= fetchIndex().then(prepare).catch(() => { loaded = null; return prepare([]); });
   return loaded;
 }
 

@@ -47,10 +47,12 @@ const Articles = () => {
         <h1 className="font-display text-2xl font-bold text-foreground mb-4" dir={dir}>{t("articles.title")}</h1>
 
         {articles && articles.length > 6 && (
-          <div className="relative max-w-md mb-6" dir={dir}>
-            <Search className="absolute top-1/2 -translate-y-1/2 start-3 h-4 w-4 text-muted-foreground pointer-events-none" />
-            <Input value={query} onChange={e => setQuery(e.target.value)} placeholder={t("articles.search")}
-              className="ps-9 text-foreground font-body" aria-label={t("articles.search")} />
+          <div className="max-w-md mb-6" dir={dir}>
+            <div className="relative">
+              <Search className="absolute top-1/2 -translate-y-1/2 start-3 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input value={query} onChange={e => setQuery(e.target.value)} placeholder={t("articles.search")}
+                className="ps-9 text-foreground font-body" aria-label={t("articles.search")} />
+            </div>
             <p className="text-xs text-muted-foreground font-body mt-1">{shown.length} {t("articles.count")}</p>
           </div>
         )}

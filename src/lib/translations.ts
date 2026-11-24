@@ -181,6 +181,7 @@ export const translations = {
   "articles.noMatch": { he: "לא נמצאו מאמרים מתאימים", en: "No matching articles" },
   "articles.loadError": { he: "לא הצלחנו לפתוח את המאמר. נסו שוב.", en: "Could not open the article. Please try again." },
   "articles.count": { he: "מאמרים", en: "articles" },
+  "articles.loginPrompt": { he: "רוצה לשאול שאלה על המאמר?", en: "Want to ask a question about this article?" },
   "articles.askQuestion": { he: "שאל שאלה על המאמר", en: "Ask a Question About This Article" },
   "articles.yourQuestions": { he: "השאלות שלך על מאמר זה:", en: "Your questions on this article:" },
 

@@ -473,7 +473,8 @@ export function ChatbotWidget() {
       {/* Floating Toggle Bubble */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-14 h-14 rounded-full bg-accent text-accent-foreground hover:bg-accent/90 shadow-xl flex items-center justify-center cursor-pointer transition-transform duration-200 hover:scale-105 active:scale-95 border border-accent-foreground/10"
+        aria-label={lang === "he" ? "צ'אט בוט חברותא AI" : "Chavruta AI Chatbot"}
+        className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-accent text-accent-foreground hover:bg-accent/90 shadow-xl flex items-center justify-center cursor-pointer transition-transform duration-200 hover:scale-105 active:scale-95 border border-accent-foreground/10"
         title={lang === "he" ? "צ'אט בוט חברותא AI" : "Chavruta AI Chatbot"}
       >
         <MessageSquare className="h-6 w-6" />

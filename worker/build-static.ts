@@ -9,7 +9,7 @@ import "../server/db";
 import { catalog, baseYoutubeId } from "../server/catalog";
 import { renderPage, SITE_URL } from "../server/seo";
 import { getTranscriptBlocks } from "../server/transcripts";
-import { buildIndex } from "../server/search-index";
+import { buildIndex, saveIndex } from "../server/search-index";
 
 const DIST = path.resolve("dist");
 const template = fs.readFileSync(path.join(DIST, "index.html"), "utf-8");
@@ -38,7 +38,15 @@ for (const m of masechtot) urls.push(`<url><loc>${SITE_URL}/masechet/${encodeURI
 // Only the original lesson pages: a per-daf copy points Google at its original.
 for (const v of all) if (v.youtube_id === baseYoutubeId(v.youtube_id)) urls.push(`<url><loc>${SITE_URL}/lesson/${encodeURIComponent(v.youtube_id)}</loc>${v.published_at ? `<lastmod>${String(v.published_at).slice(0, 10)}</lastmod>` : ""}</url>`);
 write("sitemap.xml", `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.join("")}</urlset>`);
-write("robots.txt", `User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /login\n\nSitemap: ${SITE_URL}/sitemap.xml\n`);
+// Search engines are welcome. Robots that only copy sites in bulk (SEO-tool crawlers, data
+// scrapers) use up the free monthly hosting traffic and bring no readers, so they are asked
+// to stay away.
+const BULK_BOTS = ["AhrefsBot", "SemrushBot", "MJ12bot", "DotBot", "BLEXBot", "DataForSeoBot", "PetalBot", "Bytespider", "CCBot", "meta-externalagent", "Amazonbot", "ImagesiftBot", "Barkrowler", "SeekportBot", "serpstatbot"];
+write("robots.txt", [
+  "User-agent: *", "Allow: /", "Disallow: /admin", "Disallow: /login", "Disallow: /search-index.json", "",
+  ...BULK_BOTS.flatMap(b => [`User-agent: ${b}`, "Disallow: /", ""]),
+  `Sitemap: ${SITE_URL}/sitemap.xml`, "",
+].join("\n"));
 
 const latest = [...all].sort((a, b) => String(b.published_at || "").localeCompare(String(a.published_at || ""))).slice(0, 50);
 const items = latest.map(v => `<item><title>${esc(v.title)}</title><link>${SITE_URL}/lesson/${encodeURIComponent(v.youtube_id)}</link><guid isPermaLink="false">${esc(v.youtube_id)}</guid><pubDate>${new Date(v.published_at || Date.now()).toUTCString()}</pubDate><description>${esc(v.summary || v.title)}</description></item>`).join("");
@@ -52,7 +60,9 @@ for (const [id, v] of withText) {
   const blocks = await getTranscriptBlocks(id).catch(() => null);
   if (blocks?.length) lessons.push({ id, m: v.masechet ?? null, d: v.daf ?? null, blocks });
 }
-write("search-index.json", JSON.stringify(buildIndex(lessons)));
+// Kept in the database for signed-in visitors, not as a public file: robots downloaded the
+// 10 MB file over and over and used up the free monthly hosting traffic.
+const saved = await saveIndex(buildIndex(lessons));
 
-console.log(`[Static] ${lessons.length} transcripts indexed, ${all.length} lessons, ${masechtot.length} tractates written to dist/.`);
+console.log(`[Static] ${lessons.length} transcripts indexed (${saved.changed ? `saved, ${Math.round(saved.bytes / 1024)} KB in ${saved.pieces} pieces` : "unchanged"}), ${all.length} lessons, ${masechtot.length} tractates written to dist/.`);
 process.exit(0);

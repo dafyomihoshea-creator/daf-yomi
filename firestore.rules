@@ -20,7 +20,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     match /app_meta/{id} {
-      allow get: if id == "catalog" || isAdmin();
+      allow get: if id == "catalog" || (id == "search_index" && signedIn()) || isAdmin();
+      allow write: if isAdmin();
+    }
+    // The chatbot's keyword index (a few compressed pieces): signed-in visitors only.
+    match /search_index/{id} {
+      allow get: if signedIn();
       allow write: if isAdmin();
     }
     match /transcripts/{id} {
